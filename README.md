@@ -3,7 +3,7 @@
 ### Author: Panagiotis Antivasis, Undergraduate Student at [Computer Science Department - University of Crete](https://www.csd.uoc.gr/)
 
 ## Introduction
-The following repository is the source code corresponding to the thesis of **Panagiotis Antivasis**, an undergraduate **Computer Science** student in **[University of Crete](https://www.uoc.gr/)**. 
+The following repository is the source code corresponding to the thesis of **Panagiotis Antivasis**, an undergraduate [Computer Science](https://www.csd.uoc.gr/) student in [University of Crete](https://www.uoc.gr/). 
 
 This code is built upon a speech analysis and synthesis system named [ROBUST FULL-BAND ADAPTIVE SINUSOIDAL ANALYSIS AND SYNTHESIS OF SPEECH, by George P. Kafentzis, Olivier Rosec, Yannis Stylianou](https://www.csd.uoc.gr/~kafentz/Publications/Kafentzis%20G.P.,%20Rosec%20O.,%20and%20Stylianou%20Y.%20Robut%20Adaptive%20Sinusoidal%20Analysis%20and%20Synthesis%20of%20Speech.pdf). The system in the so-called **Extended Adaptive Quasi-Harmonic Model (eaQHM)** and this source code implements it into **Python**. The code consists mainly of functions that perform speech analysis, synthesis and interpolation and those of utmost significance are **eaQHManalysis** and **eaQHMsynthesis**.
 
@@ -16,10 +16,21 @@ This code is built upon a speech analysis and synthesis system named [ROBUST FUL
 ## Release Notes
 ### Version 1.0
 
-A high pass filter and a [SWIPEP pitch estimator](ADDLINK) is provided. The code also supports **Phase adaptation (aQHM)** instead of **Full adaptation (eaQHM)** appliance.
+##### Features
+* **Phase adaptation (aQHM)** or **Full adaptation (eaQHM)** is supported.
+* Preprocessing high pass filter may be applied.
+* [SWIPEP pitch estimator](ADDLINK) is provided. 
+* Full-band analysis.
+* Either full waveform or only voiced parts are analyzed.
+* Plots are viewed showing the signal in time domain before and after reconstruction, as well as the signal's pitch estimations.
+* A basic loading screen may be viewed by setting 
+```Python
+loadingScreen=True
+```
+as a parameter in the functions, which will enable a [tqdm](https://tqdm.github.io/) loading bar in the console.
 
 ## How to Run
-A **main.py** file is provided, which executes **eaQHManalysis** on a speech signal, whose name is given as an input on the console and **eaQHMsynthesis** to the output of the former. For the program to run, a database of *.wav* and parameter files are included in "*parameter_and_wav_files.zip*".
+A *main.py* file is provided, which executes **eaQHManalysis** on a speech signal, whose name is given as an input on the console and **eaQHMsynthesis** to the output of the former. For the program to run, a database of *.wav* and parameter files are included in "*parameter_and_wav_files.zip*".
 
 What you have to do is:
 1. Unzip "*parameter_and_wav_files.zip*" in the location of your choice.
@@ -34,12 +45,6 @@ Here is an example of the output of the code running the "SA19" parameter file i
 ![](img/SA19out1.JPG)
 ![](img/SA19out2.JPG)
 ![](img/SA19out3.JPG)
-
-**Note:** You can enable a basic loading screen by setting 
-```Python
-loadingScreen=True
-```
-as a parameter in the functions, which will enable a **[tqdm](https://tqdm.github.io/)** loading bar in the console.
 
 ## Prerequisites & Requirements
 **Python 3.8.3** version or up. It is also highly suggested to use [Spyder](https://www.spyder-ide.org/) environment as the whole code was tested in it. Before you run, make sure to install all requirements by executing:
