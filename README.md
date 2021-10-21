@@ -39,18 +39,18 @@ Here is an example of the output of the code running the "SA19" parameter file i
 ```Python
 loadingScreen=True
 ```
-, which will enable a **[tqdm](https://tqdm.github.io/)** loading bar in the console.
+which will enable a **[tqdm](https://tqdm.github.io/)** loading bar in the console.
 
 ## Prerequisites & Requirements
 **Python 3.8.3** version or up. It is also highly suggested to use [Spyder](https://www.spyder-ide.org/) environment as the whole code was tested in it. Before you run, make sure to install all requirements by executing 
 ```Python
 pip install -r requirements.txt
 ```
-. 
 
 ## Known Issues
 * This code takes a lot of time, due to the nature of **Python** language, even for small speech files
-* At the time of publication, certain sections of the code have not been tested. Those parts that are inaccessible based on the majority of the parameters given are marked with the phrase ```Python
+* At the time of publication, certain sections of the code have not been tested. Those parts that are inaccessible based on the majority of the parameters given are marked with the phrase
+```Python
 #----NOT TESTED----
 ```
-. If changes are made in those parameters, that does not guarantee these sections will work properly. For example, 
+If changes are made in those parameters, that does not guarantee these sections will work properly. For example, 
