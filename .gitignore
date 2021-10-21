@@ -1,0 +1,5 @@
+# Untrack Folders
+img/
+
+# Python
+__pycache__/
