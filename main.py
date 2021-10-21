@@ -8,10 +8,10 @@ Created on Sun Jan 31 17:16:16 2021
 from functions import eaQHManalysis, eaQHMsynthesis
 from numpy import arange, float32
 from scipy.io.wavfile import write
-import matplotlib.pyplot as plt
+from matplotlib.pyplot import subplots, show
 
 def plot(t, t_reconst, signal, signal_reconst, name):
-    fig, (ax1, ax2) = plt.subplots(2, sharex=True)
+    fig, (ax1, ax2) = subplots(2, sharex=True)
     
     ax1.plot(t, signal)
     ax1.set_title(name)
@@ -21,7 +21,7 @@ def plot(t, t_reconst, signal, signal_reconst, name):
     ax2.set_xlabel('Time (s)')
     ax2.set_ylabel('Amplitude')
     
-    plt.show()
+    show()
 
 def main():
     filename = input("Write the name of the file to be processed: ")
