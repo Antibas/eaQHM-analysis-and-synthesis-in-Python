@@ -7,7 +7,7 @@ Created on Sun Jan 31 17:06:52 2021
 from scipy.io import loadmat
 
 from numpy import asarray, ndarray, zeros, transpose, flip, power, complex128, \
-uint8, int8, int16, int32, int64, float16, float32, float64
+uint8, int8, int16, int32, int64, float16, float32, float64, arange, cos, pi
 
 from scipy.signal import ellip, filtfilt
 
@@ -300,3 +300,8 @@ def ellipFilter(s, fs, fc, ftype='highpass'):
     '''
     bHigh, aHigh = ellip(6, .5, 60, 2*fc/fs, ftype)
     return filtfilt(bHigh, aHigh, s)
+
+def myHann(N):
+    n = arange(0, N+1)
+    return .5*(1 - cos(2*pi*n/N))
+    

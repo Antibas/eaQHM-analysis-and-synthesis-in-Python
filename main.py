@@ -25,7 +25,7 @@ def plot(t, t_reconst, signal, signal_reconst, name):
 
 def main():
     filename = input("Write the name of the file to be processed: ")
-    root = 'path/to/the/parameter_and_wav_files' #change according to the location of the files
+    root = '../thesis_files/mat_files/'#'path/to/the/parameter_and_wav_files' #change according to the location of the files
    
     D, S, V, SRER, aSNR = eaQHManalysis(root+filename+".wav", root+filename+"_parameters", loadingScreen=False)
     signal = V.s

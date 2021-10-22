@@ -16,7 +16,7 @@ This code is built upon a speech analysis and synthesis system named [ROBUST FUL
 ## Release Notes
 ### Version 1.0
 
-##### Features
+#### Features
 * **Phase adaptation (aQHM)** or **Full adaptation (eaQHM)** is supported.
 * Preprocessing high pass filter may be applied.
 * [SWIPEP pitch estimator](ADDLINK) is provided. 
@@ -37,7 +37,7 @@ What you have to do is:
 2. Open *main.py*.
 3. In line ```28```, change ```root``` variable to the path of the unzipped "*parameter_and_wav_files.zip*" folder.
 4. Run the code.
-5. Write the plain name (no path or *.wav*) of the file to be processed in the console and press ***Enter***.
+5. Give as input the plain name (no path or *.wav*) of the file to be processed in the console.
 6. After the program terminates, a "*\*filename\*_reconstructed.wav*" file will be generated in the ```root``` path.
 
 Here is an example of the output of the code running the "SA19" parameter file in [Spyder](https://www.spyder-ide.org/):
@@ -47,13 +47,13 @@ Here is an example of the output of the code running the "SA19" parameter file i
 ![](img/SA19out3.JPG)
 
 ## Prerequisites & Requirements
-**Python 3.8.3** version or up. It is also highly suggested to use [Spyder](https://www.spyder-ide.org/) environment as the whole code was tested in it. Before you run, make sure to install all requirements by executing:
+**Python 3.8.3** and up. It is also highly suggested to use [Spyder](https://www.spyder-ide.org/) environment as the whole code was tested in it. Before you run, make sure to install all requirements by executing:
 ```Python
 pip install -r requirements.txt
 ```
 
 ## Known Issues
-* This code takes a lot of time, due to the nature of **Python** language, even for small speech files
+* This code takes a lot of time, due to the nature of **Python** language, even for small speech files.
 * The results are 3-5 dB lower than expected, which is though not a big issue. This is due to the usage of [SWIPEP pitch estimator](ADDLINK) which produces different results in pitch estimations.
 * At the time of publication, certain sections of the code have not been tested. Those parts that are inaccessible based on the majority of the parameters given are marked with the phrase:
 ```Python

@@ -1063,22 +1063,44 @@ def swipep(x, fs, speechFile, opt, printPrompts: bool = True, loadingScreen: boo
     ----OUTPUT PARAMETERS----
     An array containing the time instants, the estimation for each instant and the strength of each estimation.
     '''
-    from numpy import hanning, power, empty, polyfit, polyval
+    from numpy import hanning, power, empty, polyfit, polyval, e
+    from scipy.signal import spectrogram, stft
+    #from matlab import specgram
     from matplotlib.pyplot import specgram, title, xlabel, ylabel
+    #from debug import printIfCond, compare
+    #from misc import matToObject
+    
+    debugSwipep = False
+    #workspace = matToObject('../thesis_files/workspaces/swipepEnd.mat')
+    
+    #printIfCond(debugSwipep, 'x difference: ', compare(x, workspace['x']))
+    #printIfCond(debugSwipep, 'fs difference: ', compare(fs, workspace['fs']))
     
     t = arange(0, len(x)/fs+opt['dt'], opt['dt'])
+    #printIfCond(debugSwipep, 't difference: ', compare(t, workspace['t'].transpose()[0]))
     
-    log2pc = arange(log2(opt['plim'][0]), log2(opt['plim'][1])+opt['dlog2p'], opt['dlog2p'])
+    log2pc = arange(log2(opt['plim'][0]), log2(opt['plim'][1]), opt['dlog2p'])
+    #printIfCond(debugSwipep, 'log2pc difference: ', compare(log2pc, workspace['log2pc'].transpose()[0]))
+                
     pc = power(2, log2pc)
+    #printIfCond(debugSwipep, 'pc difference: ', compare(pc, workspace['pc'].transpose()[0]))
+    
     S = zeros((len(pc), len(t)))
     
     logWs = apply(log10(divide(8*fs, opt['plim']))/log10(2), round)
+    #printIfCond(debugSwipep, 'logWs difference: ', compare(logWs, workspace['logWs']))
+    
     ws = power(2, arange(logWs[0], logWs[1]-1, -1))
+    #printIfCond(debugSwipep, 'ws difference: ', compare(ws, workspace['ws']))
+    
     pO = divide(8*fs,ws)
+    #printIfCond(debugSwipep, 'pO difference: ', compare(pO, workspace['pO']))
     
     d = 1 + log2pc - log2(pO[0])
+    #printIfCond(debugSwipep, 'd difference: ', compare(d, workspace['d']))
     
     fERBs = erbs2hz(arange(hz2erbs(min(pc)/4), hz2erbs(fs/2), opt['dERBs']))
+    #printIfCond(debugSwipep, 'fERBs difference: ', compare(fERBs, workspace['fERBs']))
     
     if loadingScreen:
         wsloop = tqdm(total=len(ws), position=0, leave=True)
@@ -1086,52 +1108,96 @@ def swipep(x, fs, speechFile, opt, printPrompts: bool = True, loadingScreen: boo
     for i in range(len(ws)):
         if loadingScreen:
             wsloop.set_description("SWIPEP".format(i))
-            
+        #workspaceSpec = matToObject('../thesis_files/workspaces/swipep_in_i_1_half.mat') 
+        
         dn = int(max(1, round(8*(1-opt['woverlap'])*fs/pO[i])))
         
         xzp = concatenate((zeros((int(ws[i]/2))), x, zeros((dn + int(ws[i]/2)))))
         
         w = hanning(ws[i])
-        o = max(0, round(ws[i] - dn))
-        X, f, ti, im = specgram(transpose(xzp), NFFT=int(ws[i]), Fs=fs, window=w, noverlap=int(o))
-        title("Spectrogram of " + speechFile)
-        xlabel('Time (s)')
-        ylabel('Frequency (Hz)')
+        o = int(max(0, round(ws[i] - dn)))
         
+        #f, ti, X = spectrogram(xzp, nfft=int(ws[i]), fs=fs, noverlap=o, window=w, mode='complex'); ti -= ti[0]
+        #f, ti, X = stft(xzp, nfft=int(ws[i]), fs=fs, window=w, noverlap=o, nperseg=len(w)); ti = ti[0:len(ti)-2]+ti[1]; X = X[:, 0:len(X[0])-2]
+        #f, ti, X = spectrogram(xzp, fs); ti -= ti[0]
+        '''X_amps = specgram(xzp, NFFT=int(ws[i]), Fs=fs, noverlap=o, mode='magnitude')[0]
+        X_phases, f, ti, im = specgram(xzp, NFFT=int(ws[i]), Fs=fs, noverlap=o, mode='phase')
+        X = X_amps*(e**(1j*X_phases))
+        ti -= ti[0]'''
+        
+        X, f, ti, im = specgram(xzp, NFFT=int(ws[i]), Fs=fs, noverlap=o, window=w); ti -= ti[0]
+        
+        
+        #f, ti, X = stft(xzp, nfft=int(ws[i]), fs=fs, window=w, noverlap=o, nperseg=len(w))
+        #f, ti, X = stft(xzp, nfft=int(ws[i]), fs=fs, noverlap=o)
+        #f, ti, X = spectrogram(xzp, nfft=int(ws[i]), fs=fs, noverlap=o, nperseg=2*o, mode='complex')
+        #f, ti, X = spectrogram(xzp, nfft=int(ws[i]), fs=fs, noverlap=o, window=w, mode='complex')
+        
+        
+        
+        #title("Spectrogram of " + speechFile)
+        #xlabel('Time (s)')
+        #ylabel('Frequency (Hz)')
+        
+        #ti = ti[0:len(ti)-2]
+        #ti -= ti[0]
+        '''printIfCond(debugSwipep, 'dn difference: ', compare(dn, workspaceSpec['dn']))
+        printIfCond(debugSwipep, 'xzp difference: ', compare(xzp, workspaceSpec['xzp']))
+        printIfCond(debugSwipep, 'w difference: ', compare(w, workspaceSpec['w'].transpose()[0], ignoreZeros=True))
+        printIfCond(debugSwipep, 'o difference: ', compare(o, workspaceSpec['o']))
+        printIfCond(debugSwipep, 'f difference: ', compare(f, workspaceSpec['f']))
+        printIfCond(debugSwipep, 'abs(X) difference: ', compare(abs(X), abs(workspaceSpec['X']), ignoreZeros=True, ignoreSign=True))
+        printIfCond(debugSwipep, 'ti difference: ', compare(ti, workspaceSpec['ti']))
+        '''
         if len(ws) == 1:
             j = pc
             k = []
         elif i == len(ws)-1:
-            j = argwhere(d - i > 0)
-            k = argwhere(d[j] - i < 1)
+            #j = argwhere(d - i > 0)
+            #k = argwhere(d[j] - i < 1)
+            j = argwhere(d - i > -1)
+            k = argwhere(d[j] - i < 0)
         elif i == 0:
             j = argwhere(d - i < 2)
             k = argwhere(d[j] - i > 1)
         else:
-            j = argwhere(abs(d - (i+1)) < 1)
+            j = argwhere(abs(d - i) < 1)
             k = arange(0, len(j))
         
         fERBs = fERBs[argwhere(fERBs > pc[j[0]]/4)[0][0]:]
+        #printIfCond(debugSwipep, 'fERBs difference: ', compare(fERBs, workspaceSpec['fERBs']))
         
-        Xint = interp1d(f, abs(transpose(X)), kind=3, fill_value=0)(fERBs)
+        L = interp1d(f, transpose(abs(X)), kind=3, fill_value=0)(fERBs)
         
-        for xi in range(len(Xint)):
-            for xj in range(len(Xint[xi])):
-                if Xint[xi][xj] < 0:
-                    Xint[xi][xj] = 0.0
+        for xi in range(len(L)):
+            for xj in range(len(L[xi])):
+                if L[xi][xj] < 0:
+                    L[xi][xj] = 0.0
                 else:
-                    Xint[xi][xj] = sqrt(Xint[xi][xj])
-        Si = pitchStrengthAllCandidates(fERBs, transpose(Xint), pc[j]) 
+                    L[xi][xj] = sqrt(L[xi][xj])
+        #printIfCond(debugSwipep, 'L difference: ', compare(L, workspaceSpec['L'].transpose(), ignoreZeros=True))
+        
+        Si = pitchStrengthAllCandidates(fERBs, transpose(L), pc[j]) 
+        
         
         if len(Si) > 1:
-            Si = interp1d(ti-ti[0], Si, 'linear')(t)
+            Si = interp1d(ti, Si, 'linear')(t)
         else:
             Si = empty((len(Si), len(t)))
+            
+        #printIfCond(debugSwipep, 'Si difference: ', compare(Si, workspaceSpec['Si']))
         
-        k = k[:, 0]
+        if isContainer(k[0]):
+            k = k[:, 0]
+        #printIfCond(debugSwipep, 'k difference: ', compare(k, workspaceSpec['k']))
+        
         lamda = d[ j[k] ] - (i+1)
+        #printIfCond(debugSwipep, 'lamda difference: ', compare(lamda, workspace['lambda']))
+        
         mu = ones( len(j) )
         mu[k] = 1 - abs( transpose(lamda) )
+        #printIfCond(debugSwipep, 'mu difference: ', compare(mu, workspace['mu']))
+        
         S[transpose(j)[0],:] = S[transpose(j)[0],:] + transpose(tile(mu,(len(Si[1]), 1))) * Si
         
         if loadingScreen:
@@ -1139,11 +1205,25 @@ def swipep(x, fs, speechFile, opt, printPrompts: bool = True, loadingScreen: boo
             
     if loadingScreen:
         wsloop.close()
+       
+    '''printIfCond(debugSwipep, 'dn difference: ', compare(dn, workspace['dn']))
+    printIfCond(debugSwipep, 'xzp difference: ', compare(xzp, workspace['xzp']))
+    printIfCond(debugSwipep, 'w difference: ', compare(w, workspace['w'].transpose()[0], ignoreZeros=True))
+    printIfCond(debugSwipep, 'o difference: ', compare(o, workspace['o']))
+    printIfCond(debugSwipep, 'f difference: ', compare(f, workspace['f']))
+    printIfCond(debugSwipep, 'ti difference: ', compare(ti, workspace['ti']))
+    printIfCond(debugSwipep, 'X difference: ', compare(X, workspace['X'], ignoreZeros=True, ignoreSign=True))
+    printIfCond(debugSwipep, 'fERBs difference: ', compare(fERBs, workspace['fERBs']))
+    printIfCond(debugSwipep, 'L difference: ', compare(L, workspace['L'].transpose(), ignoreZeros=True))
+    printIfCond(debugSwipep, 'Si difference: ', compare(Si, workspace['Si']))
+    printIfCond(debugSwipep, 'lamda difference: ', compare(lamda, workspace['lambda']))
+    printIfCond(debugSwipep, 'mu difference: ', compare(mu, workspace['mu']))
+    '''
     p = empty((len(S[0]), 1))
     s = empty((len(S[0]), 1))
     for j in range(len(S[0])):
         s[j] = max(S[:, j])
-        i = singlelize(argwhere(S[:, j] == s[j]))
+        i = singlelize(argwhere(S[:, j] == s[j])[0])
         
         if s[j] < opt['sTHR']:
             continue
@@ -1161,9 +1241,24 @@ def swipep(x, fs, speechFile, opt, printPrompts: bool = True, loadingScreen: boo
             s[j] = max(arr)
             k = singlelize(argwhere(arr == s[j]))
             p[j] = power(2, log2(pc[I[0]]) + (k-1)/12/100)
+    
+    #printIfCond(debugSwipep, 'j difference: ', compare(j, workspace['j']))
+    #printIfCond(debugSwipep, 'k difference: ', compare(k, workspace['k']))
+    
     return concatenate((transpose1dArray(t), p, s), axis=1)
 
 def pitchStrengthAllCandidates(f, L, pc):
+    #from debug import printIfCond, compare
+    #from misc import matToObject
+    
+    '''debugAllC = False
+    workspace = matToObject('../thesis_files/workspaces/allCand_in_i_1.mat')
+    printIfCond(debugAllC, '----pitchStrengthAllCandidates')
+    
+    printIfCond(debugAllC, 'f difference: ', compare(f, workspace['f'].transpose()[0]))
+    printIfCond(debugAllC, 'L difference: ', compare(L, workspace['L'], ignoreZeros=True))
+    printIfCond(debugAllC, 'pc difference: ', compare(pc, workspace['pc']))
+    '''
     S = zeros((len(pc), len(L[1])))
     k = zeros(len(pc)+1, dtype=int)
     for j in range(len(k)-1):
@@ -1171,32 +1266,59 @@ def pitchStrengthAllCandidates(f, L, pc):
         
 
     k = k[1:]
+    #printIfCond(debugAllC, 'k difference: ', compare(k, workspace['k'], ignoreZeros=True))
+    
     LL = fliplr(cumsum(fliplr(multiply(L,L)), axis=0))
     N = apply(LL, sqrt)
+    #printIfCond(debugAllC, 'N difference: ', compare(N, workspace['N']))
+    
     for j in range(len(pc)):
         n = N[k[j], :]
+        #for ni in range(len(n)):
+        #    if n[ni] == 0:
+        #        n[ni] = inf
         n[n==0] = inf
         NL = L[k[j]:,:] / tile( n, (len(L)-k[j], 1))
         S[j,:] = pitchStrengthOneCandidate(f[k[j]:], NL, pc[j])
     
+    #printIfCond(debugAllC, 'n difference: ', compare(n, workspace['n']))
+    #printIfCond(debugAllC, 'NL difference: ', compare(NL, workspace['NL'], ignoreZeros=True))
+    #printIfCond(debugAllC, 'S difference: ', compare(S, workspace['S']))
     return S
 
 def pitchStrengthOneCandidate(f, NL, pc):
+    #from debug import printIfCond, compare
+    #from misc import matToObject
+    
+    #debugOneC = False
+    #workspace = matToObject('../thesis_files/workspaces/oneCand_in_j_1.mat')
+    #printIfCond(debugOneC, '----pitchStrengthOneCandidate')
+    
+    #printIfCond(debugOneC, 'f difference: ', compare(f, workspace['f'].transpose()[0]))
+    #printIfCond(debugOneC, 'NL difference: ', compare(NL, workspace['NL'], ignoreZeros=True))
+    #printIfCond(debugOneC, 'pc difference: ', compare(pc, workspace['pc']))
+    
     n = int(fix( end(f)/pc - 0.75 )[0])
     if n==0:
         return None
+    
+    #printIfCond(debugOneC, 'n difference: ', compare(n, workspace['n']))
+    
     k = zeros(len(f))
     q = f / pc
+    #printIfCond(debugOneC, 'q difference: ', compare(q, workspace['q']))
     
     pr = concatenate(([1], primes(n)))
     for i in pr:
         a = abs( q - i )
         p = argwhere(a < .25)
         k[p] = cos(2*pi*q[p])
-        v = (0.25 < a) + (a < 0.75)
+        v = argwhere((0.25 < a) & (a < 0.75))
         k[v] = k[v] + cos( 2*pi * q[v] ) / 2
     k = k * apply(1/f, sqrt)
     k = k / norm( k[k>0] )
+    #printIfCond(debugOneC, 'k difference: ', compare(k, workspace['k']))
+    
     return dot(transpose(k), NL)
 
 def getLinear(v, t):
