@@ -11,11 +11,11 @@ from numpy import arange, zeros, blackman, hamming, \
 argwhere, insert, flipud, fliplr, asarray, append, multiply, \
 real, imag, pi, divide, log10, angle, diff, unwrap, sin, cos, \
 std, concatenate, tile, dot, ndarray, transpose, conjugate, ones, \
-ceil, inf, cumsum, fix
+ceil, inf, cumsum, fix, random
 from math import log2, sqrt
 
-from numpy.linalg import inv, norm
-#from numpy.linalg import cond
+from numpy.linalg import inv, norm, LinAlgError
+from numpy.linalg import cond
 
 from scipy.interpolate import interp1d
 from scipy.signal import lfilter
@@ -273,33 +273,27 @@ def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, lo
                             fm_tmp = fm_cur[tith + n, idx]
                             am_tmp = am_cur[tith + n, idx]
                             Kend = 1
-                        else:
-                            fm_tmp = transpose(fm_cur[tith + n, idx])
-                            am_tmp = transpose(am_cur[tith + n, idx])
-                            Kend = len(idx)
-                        
-                        K = end(idx)+1
-                        
-                        for k in range(Kend):
-                            L = len(fm_tmp[:, k])
                             
-                            zr = argwhere(fm_tmp[:, k] == 0)
-                            nzr = argwhere(fm_tmp[:, k])
+                            K = 1
+                            L = len(fm_tmp)
+                                
+                            zr = argwhere(fm_tmp == 0)
+                            nzr = argwhere(fm_tmp)
                             
                             if len(zr) != 0:
                                 zridx = zr[0][0]
                                 nzridx = nzr[0][0]
                                 if zridx == 0:
-                                    fm_tmp[zridx][k]= fm_tmp[nzridx][k]
-                                    am_tmp[zridx][k] = am_tmp[nzridx][k]
+                                    fm_tmp[zridx]= fm_tmp[nzridx]
+                                    am_tmp[zridx] = am_tmp[nzridx]
                                    
                                     nzr = insert(nzr, 0, zridx)
                                 
                                 zridx = end(zr)
                                 nzridx = end(nzr)
                                 if zridx == L-1:
-                                    fm_tmp[zridx][k] = fm_tmp[nzridx][k]
-                                    am_tmp[zridx][k] = am_tmp[nzridx][k]
+                                    fm_tmp[zridx] = fm_tmp[nzridx]
+                                    am_tmp[zridx] = am_tmp[nzridx]
                                    
                                     nzr = append(nzr, zridx)
                             
@@ -307,22 +301,63 @@ def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, lo
                             if len(transpose(nzr)) == 1:
                                 nzr = transpose(nzr)[0]
                                 
-                            fm_tmp[:, k] = interp1d(nzr, fm_tmp[nzr, k])(x_new)
-                            am_tmp[:, k] = interp1d(nzr, am_tmp[nzr, k])(x_new)
+                            fm_tmp = interp1d(nzr, fm_tmp[nzr])(x_new)
+                            am_tmp = interp1d(nzr, am_tmp[nzr])(x_new)
+                        else:
+                            fm_tmp = transpose(fm_cur[tith + n, idx])
+                            am_tmp = transpose(am_cur[tith + n, idx])
+                            Kend = len(idx)
+                        
+                            K = end(idx)+1
+                        
+                            for k in range(Kend):
+                                L = len(fm_tmp[:, k])
+                                
+                                zr = argwhere(fm_tmp[:, k] == 0)
+                                nzr = argwhere(fm_tmp[:, k])
+                                
+                                if len(zr) != 0:
+                                    zridx = zr[0][0]
+                                    nzridx = nzr[0][0]
+                                    if zridx == 0:
+                                        fm_tmp[zridx][k]= fm_tmp[nzridx][k]
+                                        am_tmp[zridx][k] = am_tmp[nzridx][k]
+                                       
+                                        nzr = insert(nzr, 0, zridx)
+                                    
+                                    zridx = end(zr)
+                                    nzridx = end(nzr)
+                                    if zridx == L-1:
+                                        fm_tmp[zridx][k] = fm_tmp[nzridx][k]
+                                        am_tmp[zridx][k] = am_tmp[nzridx][k]
+                                       
+                                        nzr = append(nzr, zridx)
+                                
+                                x_new = arange(0, L)
+                                if len(transpose(nzr)) == 1:
+                                    nzr = transpose(nzr)[0]
+                                    
+                                fm_tmp[:, k] = interp1d(nzr, fm_tmp[nzr, k])(x_new)
+                                am_tmp[:, k] = interp1d(nzr, am_tmp[nzr, k])(x_new)
                         
                         if isinstance(idx, ndarray):
                             idx = concatenate((transpose(-flipud(idx+1))[0], [0], transpose(idx)[0]+1)) + K
+                            tmp_zeros = zeros((L, 1), float)
+                        
+                            fm_tmp = concatenate((-flipud(fm_tmp), tmp_zeros, fm_tmp), axis=1)
+                            am_tmp = concatenate((flipud(am_tmp), tmp_zeros, am_tmp), axis=1)
                         else:
-                            idx = asarray([K, K, K])
+                            idx = asarray([K-1, K, K+1])
                         
-                        tmp_zeros = zeros((L, 1), float)
+                            tmp_zeros = zeros((L, 1), float)
                         
-                        fm_tmp = concatenate((-flipud(fm_tmp), tmp_zeros, fm_tmp), axis=1)
+                            fm_tmp = concatenate((-flipud(transpose1dArray(fm_tmp)), tmp_zeros, transpose1dArray(fm_tmp)), axis=1)
+                            am_tmp = concatenate((flipud(transpose1dArray(am_tmp)), tmp_zeros, transpose1dArray(am_tmp)), axis=1)
                         
                         if not options["extended_aQHM"]:
                             ak_tmp, bk_tmp, aSNR[m][i] = aqhmLS_complexamps(s[n + tith], fm_tmp, win, fs)
                         else:
-                            am_tmp = concatenate((flipud(am_tmp), tmp_zeros, am_tmp), axis=1)
+                            #am_tmp = concatenate((flipud(am_tmp), tmp_zeros, am_tmp), axis=1)
                             
                             ak_tmp, bk_tmp, aSNR[m][i] = eaqhmLS_complexamps(s[n + tith], am_tmp, fm_tmp, win, fs)
                         
@@ -520,11 +555,14 @@ def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, lo
                 stochloop.close()
         except ModuleNotFoundError:
             print("Stochastic part skipped: 'pip install scikits' is required")
-            
-    print('Signal adapted to {} dB SRER'.format(max(SRER)))
-    print('Total Time: {}\n\n'.format(strftime("%H:%M:%S", gmtime(time() - startTime))))
+    endTime = strftime("%H:%M:%S", gmtime(time() - startTime))
+    if printPrompts:        
+        print('Signal adapted to {} dB SRER'.format(round(max(SRER), 6)))
+        #endTime = strftime("%H:%M:%S", gmtime(time() - startTime))
+        print('Total Time: {}\n\n'.format(strftime("%H:%M:%S", gmtime(time() - startTime))))
     
-    return D, S, V, SRER, aSNR
+    return round(max(SRER), 6), endTime
+    #return D, S, V, SRER, aSNR
 
 def eaQHMsynthesis(D, S, V, printPrompts: bool = True, loadingScreen: bool = True):
     '''
@@ -538,7 +576,6 @@ def eaQHMsynthesis(D, S, V, printPrompts: bool = True, loadingScreen: bool = Tru
     3) V: Various - Various important data.
     4) printPrompts: bool (optional) - Determines if prompts of this process will be printed. 
     If not given, the default value is True.
-
     5) loadingScreen: bool (optional) - Determines if a tqdm loading screen will be displayed in the console. 
     If not given, the default value is True.
     ----OUTPUT PARAMETERS----
@@ -864,7 +901,7 @@ def eaqhmLS_complexamps(s, am, fm, win, fs):
     
     R = dot(Ewt, Ew)
     
-    #assert(cond(R) < 10**(15)),'CAUTION!!! Bad condition of matrix.'
+    assert(cond(R) < 10**(15)),'CAUTION!!! Bad condition of matrix.'
     
     wins = multiply(wint, s)
     arr = dot(Ewt, wins)
@@ -1135,9 +1172,9 @@ def swipep(x, fs, speechFile, opt, printPrompts: bool = True, loadingScreen: boo
         
         
         
-        #title("Spectrogram of " + speechFile)
-        #xlabel('Time (s)')
-        #ylabel('Frequency (Hz)')
+        title("Spectrogram of " + speechFile)
+        xlabel('Time (s)')
+        ylabel('Frequency (Hz)')
         
         #ti = ti[0:len(ti)-2]
         #ti -= ti[0]
@@ -1149,19 +1186,23 @@ def swipep(x, fs, speechFile, opt, printPrompts: bool = True, loadingScreen: boo
         printIfCond(debugSwipep, 'abs(X) difference: ', compare(abs(X), abs(workspaceSpec['X']), ignoreZeros=True, ignoreSign=True))
         printIfCond(debugSwipep, 'ti difference: ', compare(ti, workspaceSpec['ti']))
         '''
+        ip = i+1
         if len(ws) == 1:
-            j = pc
+            j = apply(pc, int)
             k = []
         elif i == len(ws)-1:
             #j = argwhere(d - i > 0)
             #k = argwhere(d[j] - i < 1)
-            j = argwhere(d - i > -1)
-            k = argwhere(d[j] - i < 0)
+            j = argwhere(d - ip > -1)
+            k = argwhere(d[j] - ip < 0)
         elif i == 0:
-            j = argwhere(d - i < 2)
-            k = argwhere(d[j] - i > 1)
+            #j = argwhere(d - i < 2)
+            #k = argwhere(d[j] - i > 1)
+            
+            j = argwhere(d - ip < 1)
+            k = argwhere(d[j] - ip > 0)
         else:
-            j = argwhere(abs(d - i) < 1)
+            j = argwhere(abs(d - ip) < 1)
             k = arange(0, len(j))
         
         fERBs = fERBs[argwhere(fERBs > pc[j[0]]/4)[0][0]:]
