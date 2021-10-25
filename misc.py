@@ -302,6 +302,7 @@ def ellipFilter(s, fs, fc, ftype='highpass'):
     return filtfilt(bHigh, aHigh, s)
 
 def myHann(N):
-    n = arange(0, N+1)
+    N += 1
+    n = arange(1, N)
     return .5*(1 - cos(2*pi*n/N))
     
