@@ -7,13 +7,16 @@ Created on Sun Jan 31 17:06:52 2021
 from scipy.io import loadmat
 
 from numpy import asarray, ndarray, zeros, transpose, flip, power, complex128, \
-uint8, int8, int16, int32, int64, float16, float32, float64, arange, cos, pi
+uint8, int8, int16, int32, int64, float16, float32, float64, arange, cos, pi, \
+fix, multiply, imag, tile
 
 from scipy.signal import ellip, filtfilt
 
 from math import log2
 
 from sympy import isprime
+
+from copy import deepcopy
 
 normalize = 32768
 
@@ -42,7 +45,7 @@ def matToObject(filename: str):
     return obj
 
 
-def loadOptions(filename: str = ""):
+def loadOptions(filename: str = "", ignoreSWIPEP: bool = False):
     '''
     Loads a parameter file with name filename to
     load the options of eaQHManalysis. 
@@ -69,7 +72,7 @@ def loadOptions(filename: str = ""):
                 "fullBand": opt[0][0][2][0][0] == 1,
                 "extended_aQHM": opt[0][0][3][0][0] == 1,
                 "highPassFilter": opt[0][0][6][0][0] == 1,
-                "SWIPEP": opt[0][0][8][0][0] == 1,
+                "SWIPEP": opt[0][0][8][0][0] == 1 and not ignoreSWIPEP,
                 "numPartials": opt[0][0][10][0][0]
             }
     else:
@@ -78,7 +81,7 @@ def loadOptions(filename: str = ""):
                 "fullBand": True,
                 "extended_aQHM": True,
                 "highPassFilter": False,
-                "SWIPEP": True,
+                "SWIPEP": True and not ignoreSWIPEP,
                 "numPartials": 0
             }
     return obj
@@ -301,8 +304,126 @@ def ellipFilter(s, fs, fc, ftype='highpass'):
     bHigh, aHigh = ellip(6, .5, 60, 2*fc/fs, ftype)
     return filtfilt(bHigh, aHigh, s)
 
+def arrayMax(n, a):
+    a2 = deepcopy(a)
+    for i in range(len(a)):
+        for j in range(len(a[i])):
+            if a[i][j] < n:
+                a2[i][j] = n
+    return a2
+
 def myHann(N):
     N += 1
     n = arange(1, N)
     return .5*(1 - cos(2*pi*n/N))
+
+def spline_interp(x, y, xn):
+    N = len(x)
+    M = len(xn)
+    
+    y2 = spline(x, y)
+    yf = zeros(M)
+    
+    for i in range(M):
+        tmp = xn[i]
+        if tmp < x[1]:
+            yf[i] = y[1]
+            continue
+        elif tmp > x[N-1]:
+            yf[i] = y[N-1]
+            continue
+        else:
+            yf[i] = splint(x, y, y2, tmp)
+    
+    return yf
+
+def spline(x, y):
+    n = len(x)
+    u = zeros(n-1)
+    
+    y2 = zeros(n)
+    
+    y2[1] = 0.5
+    u[1] = (3/(x[2]-x[1]))*((y[2]-y[1])/(x[2]-x[1]))
+    
+    for i in range(2, n-1):
+        sig = (x[i] - x[i-1])/(x[i+1] - x[i-1])
+        p = sig*y2[i-1] + 2.0
+        y2[i] = (sig - 1.0)/p
+        u[i] = (y[i+1] - y[i])/(x[i+1] - x[i]) - (y[i] - y[i-1])/(x[i] - x[i-1])
+        u[i] = (6.0*u[i]/(x[i+1] - x[i-1]) - sig*u[i-1])/p
+    
+    qn = 0.5
+    un = (3.0/(x[n-1] - x[n-2])) * (-(y[n-1] - y[n-2])/(x[n-1] - x[n-2]))
+    
+    y2[n-1] = (un - qn*u[n-2])/(qn*y2[n-2] + 1.0)
+    
+    for k in range(n-1, 1, -1):
+        y2[k-1] = y2[k-1]*y2[k] + u[k-1]
+    
+    return y2
+
+def splint(x, y, y2, xv):
+    n = len(x)
+    klo = 1 
+    khi = n
+    
+    while khi - klo > 1:
+        k = (khi + klo) >> 1
+        if (x[k] > xv): 
+            khi = k
+        else:
+            klo = k
+    
+    h = x[khi] - x[klo]
+    
+    if h == 0:
+        raise ValueError("Bad x input to routine splint()!\n")
+    
+    a = (x[khi] - xv)/h
+    b = (xv - x[klo])/h
+    
+    y = a*y[klo] + b*y[khi] + ((a*a*a-a)*y2[klo] + (b*b*b-b)*y2[khi])*(h*h)/6.0
+    return y
+
+def mySpecgram(x,nfft,fs,window,noverlap):
+    from numpy.fft import fft
+                
+    nx = len(x)
+    
+    nwind = len(window)
+    
+    if nx < nwind:
+        x[nwind-1] = 0
+        nx = nwind
+        
+    ncol = int(fix((nx-noverlap)/(nwind-noverlap)))
+    
+    colindex = arange(0, ncol)*(nwind-noverlap)
+    
+    rowindex = arange(nwind)
+    
+    if len(x)<(nwind+colindex[ncol-1]-1):
+        x[nwind+colindex[ncol-1]-2] = 0
+    
+    #y = zeros((nwind, ncol))
+    y = x[tile(transpose1dArray(rowindex), ncol)+tile(transpose1dArray(colindex), nwind).transpose()]
+    
+    y2 = multiply(tile(transpose1dArray(window), ncol), y)
+    
+    y3 = fft(y2.transpose(),nfft).transpose()
+    
+    if not any(imag(x)):
+        if nfft % 2 == 0:
+            select = arange(0, (nfft+1)/2, dtype=int)
+        else:
+            select = arange(0, (nfft)/2, dtype=int)
+    
+        y3 = y3[select, :]
+    else:
+        select = arange(0, nfft)
+    
+    f = (select)*fs/nfft
+    t = colindex/fs
+    return y3, f, t
     
