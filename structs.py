@@ -53,7 +53,6 @@ class Various:
                  fullBand = False, Kmax = 0, Fmax = 0, filename = '', fullWaveform = False):
         self.s = s
         self.fs = fs
-        self.qh = qh
         self.env = env
         self.noi_env = noi_env
         self.fullBand = fullBand

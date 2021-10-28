@@ -27,7 +27,7 @@ def main():
     filename = 'sa19'#input("Write the name of the file to be processed: ")
     root = '../thesis_files/mat_files/'#'path/to/the/parameter_and_wav_files' #change according to the location of the files
    
-    D, S, V, SRER, aSNR = eaQHManalysis(root+filename+".wav", root+filename+"_parameters", loadingScreen=False)
+    D, S, V, SRER, aSNR = eaQHManalysis(root+filename+".wav", root+filename+"_parameters", loadingScreen=False, ignoreSWIPEP=False)
     signal = V.s
     fs = V.fs
     dt = 1/fs

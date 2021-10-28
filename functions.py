@@ -128,7 +128,9 @@ def eaQHManalysis(speechFile: str, paramFile: str, ignoreSWIPEP: bool = True, pr
     if options['SWIPEP'] or (not 'f0sin' in parameters):
         if printPrompts:
             print('SWIPEP pitch estimation is applied.')
-
+        
+        from SWIPE import swipep
+        
         if parameters['gender'] == 'male':
             f0min = 70
             f0max = 220
@@ -139,13 +141,14 @@ def eaQHManalysis(speechFile: str, paramFile: str, ignoreSWIPEP: bool = True, pr
         opt_swipep = {
                 "dt": 0.001,
                 "plim": [f0min, f0max],
-                "dlog2p": 1/48,
+                "dlog2p": 1/96,
                 "dERBs": 0.1,
                 "woverlap": 0.5,
                 "sTHR": -inf
             }
-        f0s = swipep(transpose(s2)[0], fs, speechFile, opt_swipep, printPrompts, loadingScreen)
-        f0s[:, 1] = smooth(f0s[:, 0], f0s[:, 1])
+        f0s = swipep(transpose(s2)[0], fs, [f0min, f0max], 0.001, -inf)
+        #f0s = swipep(transpose(s2)[0], fs, speechFile, opt_swipep, printPrompts, loadingScreen)
+        #f0s[:, 1] = smooth(f0s[:, 0], f0s[:, 1])
         opt_pitch_f0min = f0min        
 
         f0sin = getLinear(f0s, arange(0, len(s2)-1, round(fs*5/1000))/fs)
@@ -564,7 +567,7 @@ def eaQHManalysis(speechFile: str, paramFile: str, ignoreSWIPEP: bool = True, pr
         #endTime = strftime("%H:%M:%S", gmtime(time() - startTime))
         print('Total Time: {}\n\n'.format(strftime("%H:%M:%S", gmtime(time() - startTime))))
     
-    return round(max(SRER), 6), endTime
+    return round(max(SRER), 6), endTime, m+1
     #return D, S, V, SRER, aSNR
 
 def eaQHMsynthesis(D, S, V, printPrompts: bool = True, loadingScreen: bool = True):
@@ -1083,7 +1086,7 @@ def voicedUnvoicedFrames(s, fs, gender):
     
     return P,  P[1].ti-P[0].ti
     
-def swipep(x, fs, speechFile, opt, printPrompts: bool = True, loadingScreen: bool = True):
+def swipep2(x, fs, speechFile, opt, printPrompts: bool = True, loadingScreen: bool = True):
     '''
     Performs a pitch estimation of the signal for every time instant
     
