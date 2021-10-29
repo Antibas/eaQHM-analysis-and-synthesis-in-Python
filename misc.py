@@ -44,75 +44,6 @@ def matToObject(filename: str):
     return obj
 
 
-def loadOptions(filename: str = ""):
-    '''
-    Loads a parameter file with name filename to
-    load the options of eaQHManalysis. 
-    The file must contain a data named 'opt'
-    with 10 integers, each one mapped to a respective
-    option parameter (see 'help eaQHManalysis').
-    
-    If no string or an empty string is given, the
-    dictionary is loaded with the default values.
-    
-    ----INPUT PARAMETERS----
-    filename: the location of a parameter file.
-    
-    ----OUTPUT PARAMETERS----
-    A dictionary containing all option parameters 
-    for eaQHManalysis.
-    '''
-    
-    if filename != "":
-        opt = loadmat(filename)['opt']
-        
-        obj = {
-                "fullWaveform": opt[0][0][0][0][0] == 1,  
-                "fullBand": opt[0][0][2][0][0] == 1,
-                "extended_aQHM": opt[0][0][3][0][0] == 1,
-                "highPassFilter": opt[0][0][6][0][0] == 1,
-                "SWIPEP": opt[0][0][8][0][0] == 1,
-                "numPartials": opt[0][0][10][0][0]
-            }
-    else:
-        obj = {
-                "fullWaveform": True,  
-                "fullBand": True,
-                "extended_aQHM": True,
-                "highPassFilter": False,
-                "SWIPEP": True,
-                "numPartials": 0
-            }
-    return obj
-
-def loadParameters(filename: str):
-    '''
-    Loads a parameter file with name filename to
-    load all other parameters of eaQHManalysis. 
-    Default values are also assigned to some parameters
-    if not loaded.
-    
-    ----INPUT PARAMETERS----
-    filename: the location of a parameter file.
-    
-    ----OUTPUT PARAMETERS----
-    A dictionary containing all parameters 
-    for eaQHManalysis.
-    '''
-    
-    param = matToObject(filename)
-    if not "step" in param:
-        param["step"] = 15
-    if not "adpt" in param:
-        param["adpt"] = 6
-    if not "NoP" in param:
-        param["NoP"] = 3
-    if not "PAW" in param:
-        param["PAW"] = 32
-    
-    
-    return param
-
 def transpose1dArray(x):
     '''
     Transposes a 1d array-like.
@@ -317,11 +248,17 @@ def arrayMax(n, a):
     return a2
 
 def myHann(N):
+    '''
+    An optimized implementation of numpy.hanning.
+    '''
     N += 1
     n = arange(1, N)
     return .5*(1 - cos(2*pi*n/N))
 
 def mySpecgram(x,nfft,fs,window,noverlap):
+    '''
+    A different implementation of specgram
+    '''
     from numpy.fft import fft
                 
     nx = len(x)

@@ -8,10 +8,10 @@ from time import time, strftime, gmtime
 
 from structs import Deterministic, Various, Frame
 from numpy import arange, zeros, blackman, hamming, \
-argwhere, insert, flipud, fliplr, asarray, append, multiply, \
+argwhere, insert, flipud, asarray, append, multiply, \
 real, imag, pi, divide, log10, log2, angle, diff, unwrap, sin, cos, \
 std, concatenate, tile, dot, ndarray, transpose, conjugate, ones, \
-ceil, inf, cumsum, fix, random, sqrt, float64
+ceil, inf, cumsum, fix, sqrt
 
 from numpy.linalg import inv, norm
 
@@ -21,7 +21,7 @@ from scipy.io.wavfile import read
 
 from misc import arrayByIndex, mytranspose, end, transpose1dArray, normalize, \
 isContainer, isEmpty, erbs2hz, hz2erbs, primes, apply, singlelize, ellipFilter, \
-loadParameters, loadOptions, medfilt
+medfilt
 
 from copy import deepcopy
 
@@ -29,144 +29,118 @@ from tqdm import tqdm
 
 from warnings import filterwarnings
 
+from SWIPE import swipep
 
-def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, loadingScreen: bool = True):
+from scipy.linalg import LinAlgError
+
+
+
+def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
+                  maxAdpt: int = 10, pitchPeriods: int = 3, analysisWindow: int = 32, fullWaveform: bool = True,
+                  fullBand: bool = True, eaQHM: bool = True, fc: int = 0, partials: int = 0,
+                  printPrompts: bool = True, loadingScreen: bool = True):
     '''
-    Performs Adaptive Quasi-Harmonic Analysis of Speech
+    Performs adaptive Quasi-Harmonic Analysis of Speech
     using the extended adaptive Quasi-Harmonic Model and decomposes 
     speech into AM-FM components according to that model.
-    
-    ----INPUT PARAMETERS----
-    1) speechFile: string - The location of the mono .wav file to be analysed, 
-    and determines the values of s, fs, len and deterministic_part.
-    
-    2) paramFile: string - The location of a parameter file
-    containing all necessary parameters for the function. 
-    The file must contain the following parameters:
-        ---- gender: string - The gender of the speaker.
-        ---- step: int - The step size of the processing in samples. If not contained, 
-            the default value is 15.
-        ---- opt: array - An array with 11 integers, each one mapped to a respective option parameter:
-                opt[0]: fullWaveform, int(flag) - Full waveform length analysis.
-                opt[1]: <don't care>
-                opt[2]: fullBand, int(flag) - Full band analysis-in-voiced-frames flag.
-                opt[3]: extended_aQHM, int(flag) - Extended aQHM.
-                opt[4]: <don't care>
-                opt[5]: <don't care>
-                opt[6]: highPassFilter, int(flag) - High pass filtering at 30 Hz (preprocess).
-                opt[7]: <don't care>
-                opt[8]: SWIPEP, int(flag) - SWIPEP pitch estimator.
-                opt[9]: <don't care>
-                opt[10]: numPartials, int - The number of partials.
-        ---- adpt: int (optional) - The maximum number of adaptations allowed. 
-            If not contained, the default value is 6
-        ---- NoP: int (optional) - The number of analysis window size, in pitch periods. 
-            If not contained, the default value is 3
-        ---- opt_pitch_f0min: float - The minimum amount of optimal estimated frequency f0.
-        ---- f0sin: float (optional)- The f0 estimates for every time instant along with the time instants
-            and their strength. If opt[8] == 1, this parameter is ignored. 
-            If not contained, opt[8] must be 1, otherwise an error is raised.
-        ---- PAW: int - The sample of the pitch analysis window, where the analysis starts. 
-            If not contained, the default value is 32.
-    
-    3) ignoreSWIPEP: bool (optional) - Determines if the SWIPEP pitch estimator flag (opt[8]) will be ignored or not.
-    If not given, the default value is True.
-    
-    4) printPrompts: bool (optional) - Determines if prompts of this process will be printed. 
-    If not given, the default value is True.
 
-    5) loadingScreen: bool (optional) - Determines if a tqdm loading screen will be displayed in the console. 
-    If not given, the default value is True.
-    
-    ----OUTPUT PARAMETERS----
-    1) D: array [1 x No_ti] - The Deterministic part of the signal. An array containing elements of Deterministic-class type.
-    
-    2) S: array [1 x No_ti] - The Stochastic part of the signal. An array containing elements of Stochastic-class type. 
-    If fullWaveform == 1, an empty array is returned.
-    
-    3) V: Various - Various important data.
-    
-    4) SRER: array [1 x adpt+1] - An array containing all the adaptation numbers of the signal.
-    
-    5) aSNR: array [adpt x No_ti] - An array containing each SNR (Signal to Noise Ratio) of each time instant per adaptation.
+    Parameters
+    ----------
+    speechFile : str
+        The location of the mono .wav file to be analysed.
+    gender : str, optional
+        The gender of the speaker. The default is 'other'.
+    step : int, optional
+        The step size of the processing in samples. The default is 15.
+    maxAdpt : int, optional
+        The maximum number of adaptations allowed. The default is 10.
+    pitchPeriods : int, optional
+        The number of analysis window size, in pitch periods. The default is 3.
+    analysisWindow : int, optional
+        The samples of the pitch analysis window, where the analysis starts. The default is 32.
+    fullWaveform : bool, optional
+        Determines if a full waveform length analysis will be performed. The default is True.
+    fullBand : bool, optional
+        Determines if a full band analysis-in-voiced-frames will be performed. The default is True.
+    eaQHM : bool, optional
+        Determines if an adaptive Quasi-Harmonic Model or an extended adaptive Quasi-Harmonic Model will be used. The default is True.
+    fc : int, optional
+        Applies a high pass filtering at the specified Hz before the analysis starts. If <= 0, no filter is applied. The default is 0.
+    partials : int, optional
+        The number of partials to be used. If <= 0, it is determined by the pitch estimations. The default is 0.
+    printPrompts : bool, optional
+        Determines if prompts of this process will be printed. The default is True.
+    loadingScreen : bool, optional
+        Determines if a tqdm loading screen will be displayed in the console. The default is True.
+
+    Returns
+    -------
+    Determ : (No_ti) array_like
+        The Deterministic part of the signal. An array containing elements of Deterministic-class type.
+    Stoch : (No_ti) array_like
+        The Stochastic part of the signal. An array containing elements of Stochastic-class type. If fullWaveform == True, an empty array is returned.
+    Var : Various
+        Various important data.
+    SRER : (maxAdpt+1) array_like
+        An array containing all the adaptation numbers of the signal.
+    aSNR : (maxAdpt, No_ti) array_like
+        An array containing each SNR (Signal to Noise Ratio) of each time instant per adaptation.
+
     '''
     startTime = time()
     filterwarnings("ignore")
     min_interp_size = 4
     
-    parameters = loadParameters(paramFile)
-    options = loadOptions(paramFile)
-    
     fs, s = read(speechFile)
     s = transpose1dArray(s/normalize)
-    deterministic_part = s
     length = len(s)
     
-    step = parameters["step"]
-    PAW = parameters["PAW"]
-    gender = parameters["gender"]
-    maxAdpt = parameters["adpt"]
-    opt_pitch_f0min = parameters["opt_pitch_f0min"]
-    NoP = parameters["NoP"]
-    
     if printPrompts:
-        if options['extended_aQHM']:
-            print('\nPerforming extended adaptive Quasi Harmonic Model analysis in file: {}'.format(speechFile))
+        if eaQHM:
+            print('\nPerforming extended adaptive Quasi Harmonic Model analysis in file: {}\n'.format(speechFile))
         else:
-            print('\nPerforming adaptive Quasi Harmonic Model analysis in file: {}'.format(speechFile))
+            print('\nPerforming adaptive Quasi Harmonic Model analysis in file: {}\n'.format(speechFile))
     
-    if options['highPassFilter']:
+    if fc > 0:
         if printPrompts:
-            print('High pass filtering at 30 Hz is applied.')
-        s = transpose(ellipFilter(transpose(s), fs, 30))
+            print('High pass filtering at', fc, 'Hz is applied.')
+        s = transpose(ellipFilter(transpose(s), fs, fc))
         
     s2 = deepcopy(s)
-    if options['SWIPEP']:
-        if printPrompts:
-            print('SWIPEP pitch estimation is applied.\n')
         
-        from SWIPE import swipep
-        from scipy.linalg import LinAlgError
-        
-        if parameters['gender'] == 'male':
-            f0min = 70
-            f0max = 180
-        else:
-            f0min = 160
-            f0max = 300
-            
-        
-        try:
-            f0s = swipep(transpose(s2)[0], fs, speechFile, [f0min, f0max], 0.001, -inf)
-        except LinAlgError:
-            if printPrompts:
-                print("Initial SWIPEP failed. Using swipep2.\n")
-            opt_swipep = {
-                "dt": 0.001,
-                "plim": [f0min, f0max],
-                "dlog2p": 1/96,
-                "dERBs": 0.1,
-                "woverlap": 0.5,
-                "sTHR": -inf
-            }
-            f0s = swipep2(transpose(s2)[0], fs, speechFile, opt_swipep, printPrompts, loadingScreen)
-        #f0s[:, 1] = smooth(f0s[:, 0], f0s[:, 1])
-        opt_pitch_f0min = f0min        
-
-        f0sin = getLinear(f0s, arange(0, len(s2)-1, round(fs*5/1000))/fs)
-    elif "f0sin" in parameters:
-        if printPrompts:
-            print('Pitch estimations are received from the parameter file\n.')
-        f0sin = parameters["f0sin"]
+    if gender == 'male':
+        f0min = 70
+        f0max = 180
+    elif gender == 'female':
+        f0min = 160
+        f0max = 300
     else:
-        raise ValueError("You haven't selected a pitch estimation method.")
-        
+        f0min = 70
+        f0max = 500
+    
+    try:
+        f0s = swipep(transpose(s2)[0], fs, speechFile, [f0min, f0max], 0.001, -inf)
+    except LinAlgError:
+        if printPrompts:
+            print("Initial SWIPEP failed. Using swipep2.\n")
+        opt_swipep = {
+            "dt": 0.001,
+            "plim": [f0min, f0max],
+            "dlog2p": 1/96,
+            "dERBs": 0.1,
+            "woverlap": 0.5,
+            "sTHR": -inf
+        }
+        f0s = swipep2(transpose(s2)[0], fs, speechFile, opt_swipep, printPrompts, loadingScreen)
+    opt_pitch_f0min = f0min        
+
+    f0sin = getLinear(f0s, arange(0, len(s2)-1, round(fs*5/1000))/fs)
        
-    if options['fullBand']:
+    if fullBand:
         Fmax = int(fs/2-200)
         
-        if options['numPartials'] > 0:
-            Kmax = options['numPartials']
+        if partials > 0:
+            Kmax = partials
         else:
             Kmax = int(round(Fmax/min(f0sin[:,1])) + 10)
     else:
@@ -174,11 +148,11 @@ def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, lo
         Kmax = int(round(Fmax/min(f0sin[:,1])) + 10) 
     
     
-    pawsample = PAW*step
+    analysisWindowSamples = analysisWindow*step
     
     P, p_step = voicedUnvoicedFrames(s, fs, gender)
 
-    if not options['fullWaveform']:
+    if not fullWaveform:
         sp_i = []
         ss = zeros((len(s), 1))
         for p in P:
@@ -192,9 +166,9 @@ def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, lo
         deterministic_part = ss 
     else:
         for i, p in enumerate(P):
-            if p.ti > pawsample/2 and p.isSpeech and (not p.isVoiced) and p.ti < length - pawsample/2:
+            if p.ti > analysisWindowSamples/2 and p.isSpeech and (not p.isVoiced) and p.ti < length - analysisWindowSamples/2:
                 P[i].isVoiced = True
-            if p.ti > pawsample/2 and (not p.isSpeech) and (not p.isVoiced) and p.ti < length - pawsample/2:
+            if p.ti > analysisWindowSamples/2 and (not p.isSpeech) and (not p.isVoiced) and p.ti < length - analysisWindowSamples/2:
                 P[i].isSpeech = True
                 P[i].isVoiced = True
         deterministic_part = s
@@ -202,8 +176,8 @@ def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, lo
     ti = arange(1,length,step)
     No_ti = len(ti)
 
-    D = [Deterministic() for _ in range(No_ti)]
-    V = Various(s=s, fs=fs, fullBand=options["fullBand"], Kmax=Kmax, Fmax=Fmax, filename=speechFile, fullWaveform=options["fullWaveform"])
+    Determ = [Deterministic() for _ in range(No_ti)]
+    Var = Various(s=s, fs=fs, fullBand=fullBand, Kmax=Kmax, Fmax=Fmax, filename=speechFile, fullWaveform=fullWaveform)
     aSNR = zeros((maxAdpt, No_ti), float)
     SRER = zeros(maxAdpt+1, float)
     
@@ -234,7 +208,7 @@ def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, lo
             if loadingScreen:
                 analysisloop.set_description("Analysis".format(i))
             
-            if tith > pawsample and tith < length-pawsample:
+            if tith > analysisWindowSamples and tith < length-analysisWindowSamples:
                 if P[pf[i]-1].isVoiced and P[pf[i]].isVoiced: 
                     if m == 0:
                         lamda = p[i] - pf[i]
@@ -245,7 +219,7 @@ def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, lo
                         
                         fk = arange(-K,K+1)*f0
                         
-                        N[i] = max(120, round((NoP/2)*(fs/f0))) 
+                        N[i] = max(120, round((pitchPeriods/2)*(fs/f0))) 
                         
                         n = arange(-N[i]-1,N[i]) 
                         win = blackman(2*N[i]+1)
@@ -349,7 +323,7 @@ def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, lo
                             fm_tmp = concatenate((-flipud(transpose1dArray(fm_tmp)), tmp_zeros, transpose1dArray(fm_tmp)), axis=1)
                             am_tmp = concatenate((flipud(transpose1dArray(am_tmp)), tmp_zeros, transpose1dArray(am_tmp)), axis=1)
                         
-                        if not options["extended_aQHM"]:
+                        if not eaQHM:
                             ak_tmp, bk_tmp, aSNR[m][i] = aqhmLS_complexamps(s[n + tith], fm_tmp, win, fs)
                         else:
                             ak_tmp, bk_tmp, aSNR[m][i] = eaqhmLS_complexamps(s[n + tith], am_tmp, fm_tmp, win, fs)
@@ -382,11 +356,11 @@ def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, lo
                                 fm_hat[tith-1][k] = fm_cur[tith-1][k] + df[k]
                             else:
                                 fm_hat[tith-1][k] = fm_cur[tith-1][k]
-                    D[i] = Deterministic(ti=tith-1, isSpeech=True, isVoiced=True)
+                    Determ[i] = Deterministic(ti=tith-1, isSpeech=True, isVoiced=True)
                 else:
-                   D[i] = Deterministic(ti=tith-1, isSpeech=True, isVoiced=False)
+                   Determ[i] = Deterministic(ti=tith-1, isSpeech=True, isVoiced=False)
             else:
-                D[i] = Deterministic(ti=tith-1, isSpeech=False, isVoiced=False)
+                Determ[i] = Deterministic(ti=tith-1, isSpeech=False, isVoiced=False)
             
             if loadingScreen:
                 analysisloop.update(1)
@@ -454,23 +428,23 @@ def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, lo
         if m != 0:
             if SRER[m] <= SRER[m-1]:
                 break
-            V.qh = s_hat
+            Var.qh = s_hat
         a0_fin = a0_hat
         am_fin = am_hat
         fm_fin = fm_hat
         pm_fin = pm_hat
         
-    for i, d in enumerate(D):
+    for i, d in enumerate(Determ):
         if d.isVoiced:
             ti = d.ti
             idx = argwhere(am_fin[ti])
-            D[i].a0 = a0_fin[ti]
-            D[i].ak = arrayByIndex(idx, am_fin[ti, idx])
-            D[i].fk = arrayByIndex(idx, fm_fin[ti, idx])
-            D[i].pk = arrayByIndex(idx, pm_fin[ti, idx])
+            Determ[i].a0 = a0_fin[ti]
+            Determ[i].ak = arrayByIndex(idx, am_fin[ti, idx])
+            Determ[i].fk = arrayByIndex(idx, fm_fin[ti, idx])
+            Determ[i].pk = arrayByIndex(idx, pm_fin[ti, idx])
             
-    S = []
-    if not options['fullWaveform']:
+    Stoch = []
+    if not fullWaveform:
         #----NOT TESTED----
         from scikits.talkbox import lpc
         from numpy.fft import fft
@@ -478,7 +452,7 @@ def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, lo
         from structs import Stochastic
         from misc import maxfilt, peak_picking
         
-        S = [Stochastic() for _ in range(No_ti)]
+        Stoch = [Stochastic() for _ in range(No_ti)]
         
         s_noi = s - s_hatT
         
@@ -489,7 +463,7 @@ def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, lo
     
         s_noi_env = filtfilt(ones(M)/M, 1, abs(s_noi));    
         
-        V.noi_env = s_noi_env
+        Var.noi_env = s_noi_env
         
         step = 5*fs/1000
         winLen1 = 30*fs/1000+1
@@ -535,11 +509,11 @@ def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, lo
                     am_s = concatenate(([S_env[1]/2], S_env[fr_s[idx[0:min(NoS, len(idx))]]]))
                     fm_s = concatenate(([0], fr_s[idx[0:min(NoS,len(idx))]]-1))*fs/NFFT
                     
-                    S[i] = Stochastic(ti=tith-1, isSpeech=True, ap = ap, env_ak = abs(am_s), env_fk = fm_s, env_pk = angle(am_s))
+                    Stoch[i] = Stochastic(ti=tith-1, isSpeech=True, ap = ap, env_ak = abs(am_s), env_fk = fm_s, env_pk = angle(am_s))
                 else:
-                    S[i] = Stochastic(ti=tith-1, isSpeech=False)
+                    Stoch[i] = Stochastic(ti=tith-1, isSpeech=False)
             else:
-                S[i] = Stochastic(ti=tith-1, isSpeech=False)
+                Stoch[i] = Stochastic(ti=tith-1, isSpeech=False)
             if loadingScreen:
                 stochloop.update(1)
     
@@ -550,41 +524,42 @@ def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, lo
         print('Signal adapted to {} dB SRER'.format(round(max(SRER), 6)))
         print('Total Time: {}\n\n'.format(strftime("%H:%M:%S", gmtime(time() - startTime))))
     
-    #return round(max(SRER), 4), endTime, m+1
-    return D, S, V, SRER, aSNR
+    return Determ, Stoch, Var, SRER, aSNR
 
-def eaQHMsynthesis(D, S, V, printPrompts: bool = True, loadingScreen: bool = True):
+def eaQHMsynthesis(Determ, Stoch, Var, printPrompts: bool = True, loadingScreen: bool = True):
     '''
     Performs speech synthesis using the extended adaptive Quasi-Harmonic
     Model parameters from eaQHManalysis and resynthesizes speech from 
     its AM-FM components according to the eaQHM model.
-    
-    ----INPUT PARAMETERS----
-    1) D: array [1 x No_ti] - The Deterministic part of the signal. An array containing elements of Deterministic-class type.
-    2) S: array [1 x No_ti] - The Stochastic part of the signal. An array containing elements of Stochastic-class type. 
-    3) V: Various - Various important data.
-    4) printPrompts: bool (optional) - Determines if prompts of this process will be printed. 
-    If not given, the default value is True.
-    5) loadingScreen: bool (optional) - Determines if a tqdm loading screen will be displayed in the console. 
-    If not given, the default value is True.
-    ----OUTPUT PARAMETERS----
-    1) s - The reconstructed speech signal
-    
-    2) qh - The reconstructed deterministic part (quasi-harmonic)
-    
-    3) noi - The reconstructed stochastic part. 
-    If len(S) == 0,  an empty array is returned.
+
+    Parameters
+    ----------
+    Determ : (No_ti) array_like
+        The Deterministic part of the signal. An array containing elements of Deterministic-class type.
+    Stoch : (No_ti) array_like
+        The Stochastic part of the signal. An array containing elements of Stochastic-class type. If fullWaveform == True, an empty array is returned.
+    Var : Various
+        Various important data.
+    printPrompts : bool, optional
+        Determines if prompts of this process will be printed. The default is True.
+    loadingScreen : bool, optional
+        Determines if a tqdm loading screen will be displayed in the console. The default is True.
+
+    Returns
+    -------
+    s : array_like
+        The reconstructed speech signal.
     '''
     startTime = time()
     min_interp_size = 4
     
-    Kmax = V.Kmax
-    len1 = D[len(D)-1].ti + 500
-    fs= V.fs
+    Kmax = Var.Kmax
+    len1 = Determ[len(Determ)-1].ti + 500
+    fs= Var.fs
     
     length = len1
     
-    ti = zeros(len(D), int)
+    ti = zeros(len(Determ), int)
     a0 = zeros(len1, float)
     am = zeros((length, Kmax), float)
     fm = zeros((length, Kmax), float)
@@ -592,7 +567,7 @@ def eaQHMsynthesis(D, S, V, printPrompts: bool = True, loadingScreen: bool = Tru
     pm_tmp = zeros((length, Kmax), float)
     am_tmp = zeros((length, Kmax), float)
     
-    for i, d in enumerate(D):
+    for i, d in enumerate(Determ):
         ti[i] = d.ti
         if d.isVoiced:
             a0[d.ti] = d.a0
@@ -607,7 +582,7 @@ def eaQHMsynthesis(D, S, V, printPrompts: bool = True, loadingScreen: bool = Tru
     qh = a_0
     
     if printPrompts:
-        print('Performing extended adaptive Quasi Harmonic Model synthesis in file: {}'.format(V.filename))
+        print('Performing extended adaptive Quasi Harmonic Model synthesis in file: {}'.format(Var.filename))
 
     
     if loadingScreen:
@@ -658,15 +633,15 @@ def eaQHMsynthesis(D, S, V, printPrompts: bool = True, loadingScreen: bool = Tru
         
     noi = zeros(length, float)
         
-    if not V.fullBand:
+    if not Var.fullBand:
         #----NOT TESTED----
         from numpy import hanning
         from random import random
-        N = S[1].ti - S[0].ti
+        N = Stoch[1].ti - Stoch[0].ti
         n = arange(-N-1, N)
         win = hanning(2*N+1)
         
-        for st, i in enumerate(S):
+        for st, i in enumerate(Stoch):
             if st.isSpeech and st.ti > N:
                 e = zeros(2*N+1, float)
                 
@@ -685,25 +660,37 @@ def eaQHMsynthesis(D, S, V, printPrompts: bool = True, loadingScreen: bool = Tru
     print('Signal synthesised')
     print('Total Time: {}\n\n'.format(strftime("%H:%M:%S", gmtime(time() - startTime))))
     
-    return s, qh, noi
+    return s
 
 def iqhmLS_complexamps(s, fk, win, fs: int, iterates: int = 0):
     '''
     Computes iteratively the parameters of first order complex polynomial
     model using Least Squares. 
-    
-    ----INPUT PARAMETERS----
-    1) s: array - The part of the signal to be computed.
-    2) fk: array [1 x K] - The estimated frequencies (where the initial analysis is performed)
-    3) win: array - The window of the signal to be computed.
-    4) fs: int - The sampling frequency.
-    5) iterates: int - The number of iterations.
-    
-    ----OUTPUT PARAMETERS----
-    1) ak: array - Amplitude of harmonics
-    2) bk: array - Slope of harmonics
-    3) df: array - Frequency mismatch
-    4) SNR: float - Signal-to-noise ratio
+
+    Parameters
+    ----------
+    s : array_like
+        The part of the signal to be computed.
+    fk : array_like
+        The estimated frequencies.
+    win : array_like
+        The window of the signal to be computed.
+    fs : int
+        The sampling frequency.
+    iterates : int, optional
+        The number of iterations. The default is 0.
+
+    Returns
+    -------
+    ak : array_like
+        Amplitude of harmonics.
+    bk : array_like
+        Slope of harmonics.
+    df : array_like
+        Frequency mismatch.
+    SNR : float
+        Signal-to-noise ratio.
+
     '''
     wint = transpose1dArray(win)
     
@@ -752,19 +739,28 @@ def aqhmLS_complexamps(s, fm, win, fs):
     '''
     Computes the parameters of first order complex polynomial
     model using Least Squares and a FM model for the frequency. 
-    
-    ----INPUT PARAMETERS----
-    1) s: array - The part of the signal to be computed.
-    2) fm: Estimated inst. frequencies, where the analysis is performed.
-    3) win: array - The window of the signal to be computed.
-    4) fs: int - The sampling frequency.
-    
-    ----OUTPUT PARAMETERS----
-    1) ak: array - Amplitude of harmonics
-    2) bk: array - Slope of harmonics
-    3) SNR: float - Signal-to-noise ratio
+
+    Parameters
+    ----------
+    s : array_like
+        The part of the signal to be computed.
+    fm : array_like
+        The estimated instantaneous frequencies.
+    win : array_like
+        The window of the signal to be computed.
+    fs : int
+        The sampling frequency.
+
+    Returns
+    -------
+    ak : array_like
+        Amplitude of harmonics.
+    bk : array_like
+        Slope of harmonics.
+    SNR : float
+        Signal-to-noise ratio.
+
     '''
-    
     #----NOT TESTED----
     wint = transpose1dArray(win)
     
@@ -810,19 +806,30 @@ def aqhmLS_complexamps(s, fm, win, fs):
 def eaqhmLS_complexamps(s, am, fm, win, fs):
     '''
     Computes the parameters of first order complex polynomial
-    model using Least Squares, a AM and a FM model for the frequency. 
-    
-    ----INPUT PARAMETERS----
-    1) s: array - The part of the signal to be computed.
-    2) am: Estimated inst. amplitudes, where the analysis is performed.
-    3) fm: Estimated inst. frequencies, where the analysis is performed.
-    4) win: array - The window of the signal to be computed.
-    5) fs: int - The sampling frequency.
-    
-    ----OUTPUT PARAMETERS----
-    1) ak: array - Amplitude of harmonics
-    2) bk: array - Slope of harmonics
-    3) SNR: float - Signal-to-noise ratio
+    model using Least Squares, a AM and a FM model for the frequency 
+
+    Parameters
+    ----------
+    s : array_like
+        The part of the signal to be computed.
+    am : array_like
+        The estimated instantaneous amplitudes.
+    fm : array_like
+        The estimated instantaneous frequencies.
+    win : array_like
+        The window of the signal to be computed.
+    fs : int
+        The sampling frequency.
+
+    Returns
+    -------
+    ak : array_like
+        Amplitude of harmonics.
+    bk : array_like
+        Slope of harmonics.
+    SNR : float
+        Signal-to-noise ratio.
+
     '''
     wint = transpose1dArray(win)
     
@@ -870,14 +877,21 @@ def eaqhmLS_complexamps(s, am, fm, win, fs):
 def phase_integr_interpolation(fm_hat, pm_hat, idx):
     '''
     Computes phase interpolation using integration of instantaneous frequency.
-    
-    ----INPUT PARAMETERS----
-    1) fm_hat: array - The instantaneous frequency 
-    2) pm_hat: array - The instantaneous phase 
-    3) idx: array - The indices to be interpolated.
 
-    ----OUTPUT PARAMETERS----
-    A simplified array-like object.
+    Parameters
+    ----------
+    fm_hat : array_like
+        The instantaneous frequencies.
+    pm_hat : array_like
+        The instantaneous phases.
+    idx : array_like
+        The indices to be interpolated.
+
+    Returns
+    -------
+    pm_final : array_like
+        A simplified array-like object.
+
     '''
     length = len(fm_hat)
     
@@ -900,56 +914,26 @@ def phase_integr_interpolation(fm_hat, pm_hat, idx):
 
     return pm_final
 
-def smooth(t, s, windur=0.1):
-    '''
-    Smooths the signal using median filtering and zero-phase filter
-    
-    ----INPUT PARAMETERS----
-    1) t: array - The time 
-    2) s: array - The signal 
-    3) windur: float - Defines the order of the window
-    
-    ----OUTPUT PARAMETERS----
-    The smoothed signal
-    '''
-    from scipy.signal import filtfilt
-    from statistics import median
-    order = round(windur/median(diff(t))/2)*2+1
-
-    if order > 1:
-        s = medfilt(s, int(order))
-
-        medvalue = median(s)
-
-        if ceil(order/2)>1:
-            vals1 = s
-            lenori = len(vals1)
-            inds = arange(0, lenori)
-
-            if lenori<3*order/2:
-                length = int(round(2*order/2))
-                vals1 = concatenate((medvalue*ones((length,1)), vals1, medvalue*ones((length,1))))
-                inds = arange(length+1, len(vals1)-length+1)
-            win = blackman(ceil(order/2))
-            win = win/sum(win)
-            vals1 = filtfilt(win,1,vals1)
-            vals1 = vals1[inds]
-            if lenori != len(vals1):
-                raise ValueError('length mismatch: {}, {}'.format(lenori, len(vals1)))
-            return vals1
-
-def voicedUnvoicedFrames(s, fs, gender):
+def voicedUnvoicedFrames(s, fs: int, gender: str):
     '''
     Estimation of speech/nonspeech and voiced/unvoiced frames.
-    
-    ----INPUT PARAMETERS----
-    1) s: array - The signal.
-    2) fs: int - The sampling frequency.
-    
-    ----OUTPUT PARAMETERS----
-    1) P: array - An array of structures containing the time instants, 
-    if they are voiced and if they are speech.
-    2) p_step: The step of the frames.
+
+    Parameters
+    ----------
+    s : array_like
+        The signal to be estimated.
+    fs : int
+        The sampling frequency.
+    gender : str
+        The gender of the speaker.
+
+    Returns
+    -------
+    P : array_like
+        An array of structures containing the time instants, if they are voiced and if they are speech.
+    p_step : int
+        The step of the frames.
+
     '''
     s = ellipFilter(transpose(s)[0], fs, 30)
     
@@ -997,25 +981,39 @@ def voicedUnvoicedFrames(s, fs, gender):
     
     return P,  P[1].ti-P[0].ti
     
-def swipep2(x, fs, speechFile, opt, printPrompts: bool = True, loadingScreen: bool = True):
+def swipep2(x, fs: int, speechFile: str, opt: dict, printPrompts: bool = True, loadingScreen: bool = True):
     '''
-    Performs a pitch estimation of the signal for every time instant
-    
-    ----INPUT PARAMETERS----
-    1) x: array - The signal
-    2) fs: int - The sampling frequency
-    3) opt: dict - A dictionary containing all necessary parameters for the function to run.
-    It must contain the following parameters:
+    Performs a pitch estimation of the signal for every time instant.
+
+    Parameters
+    ----------
+    x : array_like
+        The signal to be estimated.
+    fs : int
+        The sampling frequency.
+    speechFile : str
+        The file name.
+    opt : dict
+        A dictionary containing all necessary parameters for the function to run. It must contain the following parameters:
         ---- dt: float - Estimation is performed every dt seconds
         ---- plim: array[2] - An array containing 2 numbers, the first being the minimum frequency
             where the pitch is searched and the second being the maximum frequency
         ---- dlog2p: float - The units the signal is distributed in samples on a base-2 logarithm scale. 
         ---- dERBs: float - The step size of ERBs
         ---- woverlap: float - The overlap of the Hanning window
-        ---- sTHR: int - The threshold of the pitch strength
-    
-    ----OUTPUT PARAMETERS----
-    An array containing the time instants, the estimation for each instant and the strength of each estimation.
+        ---- sTHR: int - The threshold of the pitch strength.
+        
+    printPrompts : bool, optional
+        Determines if prompts of this process will be printed. The default is True.
+    loadingScreen : bool, optional
+        Determines if a tqdm loading screen will be displayed in the console. The default is True.
+
+
+    Returns
+    -------
+    (3,...) array_like
+        An array containing the time instants, the estimation for each instant and the strength of each estimation.
+
     '''
     from numpy import power, empty, polyfit, polyval, nan
     from misc import myHann, arrayMax, mySpecgram
@@ -1136,7 +1134,7 @@ def pitchStrengthAllCandidates(f, L, pc):
     N = sqrt(flipud(cumsum(flipud(multiply(L,L)), axis=0)))
     
     for j in range(len(pc)):
-        n = float64(deepcopy(N[k[j], :]))
+        n = deepcopy(N[k[j], :])
         n[n==0] = inf
         NL = L[k[j]:,:] / tile( n, (len(L)-k[j], 1))
         S[j,:] = pitchStrengthOneCandidate(f[k[j]:], NL, pc[j])
@@ -1166,14 +1164,6 @@ def pitchStrengthOneCandidate(f, NL, pc):
 def getLinear(v, t):
     '''
     Linearly interpolates a time-data array
-    
-    ----INPUT PARAMETERS----
-    1) v: array[len x 2] - The array containing the time-data on the first column
-    and the values on the second column
-    2) t: array - The time-data
-    
-    
-    ----OUTPUT PARAMETERS----
     '''
     if isContainer(t):
         value = ones((len(t),len(v[0])))

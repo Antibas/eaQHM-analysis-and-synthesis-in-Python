@@ -25,17 +25,18 @@ def plot(t, t_reconst, signal, signal_reconst, name):
 
 def main():
     filename = input("Write the name of the file to be processed: ")
-    root = '../thesis_files/mat_files/'#'path/to/the/parameter_and_wav_files' #change according to the location of the files
+    gender = input("What gender is the speaker? ")
+    root = 'path/to/the/parameter_and_wav_files' #change according to the location of the files
    
-    D, S, V, SRER, aSNR = eaQHManalysis(root+filename+".wav", root+filename+"_parameters", loadingScreen=False)
-    signal = V.s
-    fs = V.fs
+    Determ, Stoch, Var, SRER, aSNR = eaQHManalysis(root+filename+".wav", gender=gender, loadingScreen=False)
+    signal = Var.s
+    fs = Var.fs
     dt = 1/fs
     t = arange(0, len(signal)/fs, dt)
     
-    signal_reconstructed, qh, noi = eaQHMsynthesis(D, S, V, loadingScreen=False)
+    signal_reconstructed = eaQHMsynthesis(Determ, Stoch, Var, loadingScreen=False)
     t_reconstructed = arange(0, len(signal_reconstructed)/fs, dt)
-    plot(t, t_reconstructed, signal, signal_reconstructed, V.filename)
+    plot(t, t_reconstructed, signal, signal_reconstructed, Var.filename)
     
     write(root+filename+"_reconstructed.wav", fs, float32(signal_reconstructed))
     
