@@ -47,3 +47,10 @@ And here are the plots produced:
 #----NOT TESTED----
 ```
 If changes are made in those parameters, that does not guarantee these sections will work properly.
+
+## Code citation
+If you wish to use and cite this code, please use the following:
+* Panagiotis Antivasis, eaQHM analysis and synthesis system, (2021), GitHub repository, https://github.com/Antibas/eaQHM-analysis-and-synthesis-in-Python
+
+This code is mostly based on the following publication: 
+* G. P. Kafentzis, O. Rosec and Y. Stylianou, "Robust full-band adaptive Sinusoidal analysis and synthesis of speech," 2014 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP), 2014, pp. 6260-6264, doi: 10.1109/ICASSP.2014.6854808.
