@@ -11,7 +11,7 @@ from numpy import arange, zeros, blackman, hamming, \
 argwhere, insert, flipud, asarray, append, multiply, \
 real, imag, pi, divide, log10, log2, angle, diff, unwrap, sin, cos, \
 std, concatenate, tile, dot, ndarray, transpose, conjugate, ones, \
-ceil, inf, cumsum, fix, sqrt
+inf, cumsum, fix, sqrt
 
 from numpy.linalg import inv, norm
 
@@ -519,7 +519,7 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
     
         if loadingScreen:
             stochloop.close()
-    endTime = strftime("%H:%M:%S", gmtime(time() - startTime))
+
     if printPrompts:        
         print('Signal adapted to {} dB SRER'.format(round(max(SRER), 6)))
         print('Total Time: {}\n\n'.format(strftime("%H:%M:%S", gmtime(time() - startTime))))
