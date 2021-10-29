@@ -1,6 +1,6 @@
 # extended adaptive Quasi-Harmonic Analysis and Synthesis of Speech in Python
 
-### Author: Panagiotis Antivasis, Undergraduate Student at [Computer Science Department - University of Crete](https://www.csd.uoc.gr/)
+### Author: Panagiotis Antivasis, Undergraduate Student at [Computer Science Department - University of Crete](https://www.csd.uoc.gr/), November 2021.
 
 ## Introduction
 The following repository is the source code corresponding to the thesis of **Panagiotis Antivasis**, an undergraduate [Computer Science](https://www.csd.uoc.gr/) student in [University of Crete](https://www.uoc.gr/). 
@@ -41,7 +41,7 @@ And here are the plots produced:
 
 ## Known Issues
 * This code takes a lot of time, even for small speech files.
-* The results may be different than expected if [SWIPEP pitch estimator](ADDLINK) is used instead of extracting the pitch estimations from the parameter files.
+* The results may be different than expected if [SWIPEP pitch estimator](http://www.kerwa.ucr.ac.cr:8080/bitstream/handle/10669/536/dissertation.pdf) is used instead of extracting the pitch estimations from the parameter files.
 * At the time of publication, certain sections of the code have not been tested. Those parts that are inaccessible based on the majority of the parameters given are marked with the phrase:
 ```Python
 #----NOT TESTED----
