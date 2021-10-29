@@ -4,7 +4,8 @@ __pycache__/
 debug.py
 test.py
 writefiles.py
+testtime.py
 
 srerMeasurements.txt
 
-srers.html
+*.html

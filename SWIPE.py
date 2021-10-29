@@ -1,27 +1,17 @@
 # coding: utf-8
 """SWIPE' pitch extraction."""
 
-#import math
-#from os import listdir, getcwd
 from pylab import norm, nan, size, fix, polyval, polyfit
-from matplotlib.pyplot import specgram
-#import numpy as np
 from numpy import arange, power, log2, log10, zeros, round_, multiply, divide, reshape, \
-newaxis, argwhere, vstack, hanning, array, transpose, maximum, sqrt, asarray, \
-empty, ones, kron, NAN, argmax, concatenate, cos, logical_and, pi, dot #, seterr, expand_dims
+newaxis, argwhere, vstack, hanning, transpose, maximum, sqrt, asarray, \
+empty, ones, kron, NAN, argmax, concatenate, cos, logical_and, pi, dot
 
 from numpy.matlib import repmat
-#from numpy import matlib
-#from scipy.io import wavfile
-#from scipy import signal
-#from scipy import interpolate
 from scipy.interpolate import interp1d
-from misc import transpose1dArray
+from misc import transpose1dArray, is_prime
+from matplotlib.pyplot import specgram, title, xlabel, ylabel
 
-WAVE_OUTPUT_FILENAME = 'Audio.wav'  # Provide here the path to an audio
-
-
-def swipep(x, fs, plim, dt, sTHR):
+def swipep(x, fs, speechFile, plim, dt, sTHR):
     """Swipe pitch estimation method.
 
     It estimates the pitch of the vector signal X with sampling frequency Fs
@@ -32,14 +22,9 @@ def swipep(x, fs, plim, dt, sTHR):
      interpolation with a resolution of 1/64 of semitone (approx. 1.6 cents).
     Pitches with a strength lower than STHR are treated as undefined.
     """
-    if not plim:
-        plim = [30, 5000]
-    if not dt:
-        dt = 0.01
+    
     dlog2p = 1.0 / 96.0
     dERBs = 0.1
-    if not sTHR:
-        sTHR = -float('Inf')
 
     t = arange(0, len(x) / float(fs), dt)    # Times
     dc = 4   # Hop size (in cycles)
@@ -61,7 +46,6 @@ def swipep(x, fs, plim, dt, sTHR):
 
     for i in range(0, len(ws)):
         ws[i] = int(ws[i])
-        # for i in range(0, 1):
         dn = round(dc * fs / pO[i])  # Hop size (in samples)
         # Zero pad signal
         will = zeros((int(ws[i] / 2), 1))
@@ -73,30 +57,32 @@ def swipep(x, fs, plim, dt, sTHR):
         w = hanning(ws[i])  # Hann window
         o = max(0, round(ws[i] - dn))  # Window overlap
         [X, f, ti, im] = specgram(xk, NFFT=int(ws[i]), Fs=fs, window=w, noverlap=int(o))
-
+        title("Spectrogram of " + speechFile)
+        xlabel('Time (s)')
+        ylabel('Frequency (Hz)')
         # Interpolate at equidistant ERBs steps
-        f = array(f)
+        f = asarray(f)
         X1 = transpose(X)
 
-        ip = interp1d(f, X1, kind='linear')(fERBs[:, newaxis])
-        interpol = ip.transpose(2, 0, 1).reshape(-1, ip.shape[1])
+        ip = interp1d(f, X1, kind='linear')(fERBs[:, newaxis]); 
+        interpol = reshape(transpose(ip, (2, 0, 1)), (-1, len(ip[0])))
         interpol1 = transpose(interpol)
         M = maximum(0, interpol1)  # Magnitude
         L = sqrt(M)  # Loudness
         # Select candidates that use this window size
         if i == (len(ws) - 1):
-            j = argwhere(d - (i + 1) > -1).transpose()[0]
-            k = argwhere(d[j] - (i + 1) < 0).transpose()[0]
+            j = transpose(argwhere(d - (i + 1) > -1))[0]
+            k = transpose(argwhere(d[j] - (i + 1) < 0))[0]
         elif i == 0:
-            j = argwhere(d - (i + 1) < 1).transpose()[0]
-            k = argwhere(d[j] - (i + 1) > 0).transpose()[0]
+            j = transpose(argwhere(d - (i + 1) < 1))[0]
+            k = transpose(argwhere(d[j] - (i + 1) > 0))[0]
         else:
-            j = argwhere(abs(d - (i + 1)) < 1).transpose()[0]
+            j = transpose(argwhere(abs(d - (i + 1)) < 1))[0]
             k1 = arange(0, len(j))  # transpose added by KG
             k = transpose(k1)
         Si = pitchStrengthAllCandidates(fERBs, L, pc[j])
         # Interpolate at desired times
-        if Si.shape[1] > 1:
+        if len(Si[0]) > 1:
             tf = []
             tf = ti.tolist()
             tf.insert(0, 0)
@@ -108,14 +94,14 @@ def swipep(x, fs, plim, dt, sTHR):
         lambda1 = d[j[k]] - (i + 1)
         mu = ones(size(j))
         mu[k] = 1 - abs(lambda1)
-        S[j, :] = S[j, :] + multiply(((kron(ones((Si.shape[1], 1)), mu)).transpose()), Si)
+        S[j, :] = S[j, :] + multiply((transpose(kron(ones((len(Si[0]), 1)), mu))), Si)
 
     # Fine-tune the pitch using parabolic interpolation
-    p = empty((Si.shape[1],))
+    p = empty((len(Si[0]),))
     p[:] = NAN
-    s = empty((Si.shape[1],))
+    s = empty((len(Si[0]),))
     s[:] = NAN
-    for j in range(0, Si.shape[1]):
+    for j in range(0, len(Si[0])):
         s[j] = (S[:, j]).max(0)
         i = argmax(S[:, j])
         if s[j] < sTHR:
@@ -127,32 +113,22 @@ def swipep(x, fs, plim, dt, sTHR):
         else:
             I = arange(i - 1, i + 2)
             tc = divide(1, pc[I])
-            # print "pc[I]", pc[I]
-            # print "tc", tc
             ntc = ((tc / tc[1]) - 1) * 2 * pi
-            # print "S[I,j]: ", shape(S[I,j])
-            # with warnings.catch_warnings():
-            # warnings.filterwarnings('error')
-            # try:
             c = polyfit(ntc, (S[I, j]), 2)
-            # print "c: ", c
             ftc = divide(1, power(2, arange(log2(pc[I[0]]), log2(pc[I[2]]), 0.0013021)))
             nftc = ((ftc / tc[1]) - 1) * 2 * pi
             s[j] = (polyval(c, nftc)).max(0)
             k = argmax(polyval(c, nftc))
-            # except RankWarning:
-            # print ("not enough data")
             p[j] = 2 ** (log2(pc[I[0]]) + (k - 1) / 768)
-    #p[isnan(s) - 1] = float('NaN')  # added by KG for 0s
     return concatenate((transpose1dArray(t), transpose1dArray(p), transpose1dArray(s)), axis=1)
 
 
 def pitchStrengthAllCandidates(f, L, pc):
     """Normalize loudness."""
     # warning off MATLAB:divideByZero
-    import numpy.sum
-    hh = numpy.sum(multiply(L, L), axis=0)
-    ff = (hh[:, newaxis]).transpose()
+    from numpy import sum as sum_
+    hh = sum_(multiply(L, L), axis=0)
+    ff = transpose(hh[:, newaxis])
     sq = sqrt(ff)
 
     gh = repmat(sq, len(L), 1)
@@ -165,21 +141,16 @@ def pitchStrengthAllCandidates(f, L, pc):
 numArr = []
 
 
-def is_prime(n):
-    """Function to check if the number is prime or not."""
-    for i in range(2, int(sqrt(n)) + 1):
-        if n % i == 0:
-            return False
-    return True
+
 
 
 def primeArr(n):
     """Return a list containing only prime numbers."""
-    for num in range(1, n + 2):
+    '''for num in range(1, n + 2):
         if is_prime(num):
             numArr.append(num)
-    #jg = (expand_dims(numArr, axis=1)).transpose()
-    return numArr
+    return numArr'''
+    return [i for i in range(1, n + 2) if is_prime(i)]
 
 
 def pitchStrengthOneCandidate(f, L, pc):
@@ -188,19 +159,17 @@ def pitchStrengthOneCandidate(f, L, pc):
     k = zeros(size(f))
     q = f / pc
     for i in (primeArr(int(n))):
-        # print "i is:",i
         a = abs(q - i)
         p = a < .25
-        k[argwhere(p)] = cos(2 * pi * q[argwhere(p)])
+        k[p] = cos(2 * pi * q[p])
         v = logical_and(.25 < a, a < .75)
-        #pl = cos(2 * pi * q[argwhere(v)]) / 2
-        k[argwhere(v)] = cos(2 * pi * q[argwhere(v)]) / 2
+        k[v] = cos(2 * pi * q[v]) / 2
 
     ff = divide(1, f)
 
     k = (k * sqrt(ff))
     k = k / norm(k[k > 0.0])
-    S = dot((k[:, newaxis]).transpose(), L)
+    S = dot(transpose(k[:, newaxis]), L)
     return S
 
 
@@ -214,18 +183,3 @@ def erbs2hz(erbs):
     """Converting erbs to hz."""
     hz = (power(10, divide(erbs, 21.4)) - 1) * 229
     return hz
-
-
-'''def swipe(audioPath):
-    """Read the audio file and output the pitches and pitch contour."""
-    print("Swipe running", audioPath)
-    fs, x = wavfile.read(audioPath)
-    seterr(divide='ignore', invalid='ignore')
-    p, t, s = swipep(x, fs, [100, 600], 0.001, 0.3)
-    print("Pitches: ", p)
-    fig = plt.figure()
-    plt.plot(p)
-    fig.savefig('hummed.png')
-    plt.show()  # show in a window of contour on UI
-
-#swipe(WAVE_OUTPUT_FILENAME)'''

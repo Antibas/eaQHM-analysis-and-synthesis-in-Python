@@ -6,16 +6,14 @@ Created on Mon Feb  1 16:00:19 2021
 """
 from time import time, strftime, gmtime
 
-from structs import Deterministic, Various
+from structs import Deterministic, Various, Frame
 from numpy import arange, zeros, blackman, hamming, \
 argwhere, insert, flipud, fliplr, asarray, append, multiply, \
 real, imag, pi, divide, log10, log2, angle, diff, unwrap, sin, cos, \
 std, concatenate, tile, dot, ndarray, transpose, conjugate, ones, \
 ceil, inf, cumsum, fix, random, sqrt, float64
-#from math import log2
 
 from numpy.linalg import inv, norm
-#from numpy.linalg import cond
 
 from scipy.interpolate import interp1d
 from scipy.signal import lfilter
@@ -23,16 +21,16 @@ from scipy.io.wavfile import read
 
 from misc import arrayByIndex, mytranspose, end, transpose1dArray, normalize, \
 isContainer, isEmpty, erbs2hz, hz2erbs, primes, apply, singlelize, ellipFilter, \
-loadParameters, loadOptions
-
-from statistics import median
+loadParameters, loadOptions, medfilt
 
 from copy import deepcopy
 
 from tqdm import tqdm
+
 from warnings import filterwarnings
 
-def eaQHManalysis(speechFile: str, paramFile: str, ignoreSWIPEP: bool = True, printPrompts: bool = True, loadingScreen: bool = True):
+
+def eaQHManalysis(speechFile: str, paramFile: str, printPrompts: bool = True, loadingScreen: bool = True):
     '''
     Performs Adaptive Quasi-Harmonic Analysis of Speech
     using the extended adaptive Quasi-Harmonic Model and decomposes 
@@ -67,7 +65,7 @@ def eaQHManalysis(speechFile: str, paramFile: str, ignoreSWIPEP: bool = True, pr
         ---- opt_pitch_f0min: float - The minimum amount of optimal estimated frequency f0.
         ---- f0sin: float (optional)- The f0 estimates for every time instant along with the time instants
             and their strength. If opt[8] == 1, this parameter is ignored. 
-            If not contained, a SWIPEP pitch estimation is applied.
+            If not contained, opt[8] must be 1, otherwise an error is raised.
         ---- PAW: int - The sample of the pitch analysis window, where the analysis starts. 
             If not contained, the default value is 32.
     
@@ -97,7 +95,7 @@ def eaQHManalysis(speechFile: str, paramFile: str, ignoreSWIPEP: bool = True, pr
     min_interp_size = 4
     
     parameters = loadParameters(paramFile)
-    options = loadOptions(paramFile, ignoreSWIPEP)
+    options = loadOptions(paramFile)
     
     fs, s = read(speechFile)
     s = transpose1dArray(s/normalize)
@@ -112,12 +110,10 @@ def eaQHManalysis(speechFile: str, paramFile: str, ignoreSWIPEP: bool = True, pr
     NoP = parameters["NoP"]
     
     if printPrompts:
-        print('extended Adaptive Quasi-Harmonic Analysis initates\n')
-        
         if options['extended_aQHM']:
-            print('Full adaptation is applied.')
+            print('\nPerforming extended adaptive Quasi Harmonic Model analysis in file: {}'.format(speechFile))
         else:
-            print('Phase adaptation is applied.')
+            print('\nPerforming adaptive Quasi Harmonic Model analysis in file: {}'.format(speechFile))
     
     if options['highPassFilter']:
         if printPrompts:
@@ -125,20 +121,27 @@ def eaQHManalysis(speechFile: str, paramFile: str, ignoreSWIPEP: bool = True, pr
         s = transpose(ellipFilter(transpose(s), fs, 30))
         
     s2 = deepcopy(s)
-    if options['SWIPEP'] or (not 'f0sin' in parameters):
+    if options['SWIPEP']:
         if printPrompts:
-            print('SWIPEP pitch estimation is applied.')
+            print('SWIPEP pitch estimation is applied.\n')
         
         from SWIPE import swipep
+        from scipy.linalg import LinAlgError
         
         if parameters['gender'] == 'male':
             f0min = 70
-            f0max = 220
+            f0max = 180
         else:
-            f0min = 120
-            f0max = 350
+            f0min = 160
+            f0max = 300
             
-        opt_swipep = {
+        
+        try:
+            f0s = swipep(transpose(s2)[0], fs, speechFile, [f0min, f0max], 0.001, -inf)
+        except LinAlgError:
+            if printPrompts:
+                print("Initial SWIPEP failed. Using swipep2.\n")
+            opt_swipep = {
                 "dt": 0.001,
                 "plim": [f0min, f0max],
                 "dlog2p": 1/96,
@@ -146,21 +149,20 @@ def eaQHManalysis(speechFile: str, paramFile: str, ignoreSWIPEP: bool = True, pr
                 "woverlap": 0.5,
                 "sTHR": -inf
             }
-        f0s = swipep(transpose(s2)[0], fs, [f0min, f0max], 0.001, -inf)
-        #f0s = swipep(transpose(s2)[0], fs, speechFile, opt_swipep, printPrompts, loadingScreen)
+            f0s = swipep2(transpose(s2)[0], fs, speechFile, opt_swipep, printPrompts, loadingScreen)
         #f0s[:, 1] = smooth(f0s[:, 0], f0s[:, 1])
         opt_pitch_f0min = f0min        
 
         f0sin = getLinear(f0s, arange(0, len(s2)-1, round(fs*5/1000))/fs)
-    else:
+    elif "f0sin" in parameters:
         if printPrompts:
-            print('Pitch estimations are received from the parameter file')
+            print('Pitch estimations are received from the parameter file\n.')
         f0sin = parameters["f0sin"]
+    else:
+        raise ValueError("You haven't selected a pitch estimation method.")
         
        
     if options['fullBand']:
-        if printPrompts:
-            print('Full band analysis-in-voiced-frames is performed')
         Fmax = int(fs/2-200)
         
         if options['numPartials'] > 0:
@@ -177,8 +179,6 @@ def eaQHManalysis(speechFile: str, paramFile: str, ignoreSWIPEP: bool = True, pr
     P, p_step = voicedUnvoicedFrames(s, fs, gender)
 
     if not options['fullWaveform']:
-        if printPrompts:
-            print('Only voiced parts analysis is performed. Noise will be added to model unvoiced speech.')
         sp_i = []
         ss = zeros((len(s), 1))
         for p in P:
@@ -191,8 +191,6 @@ def eaQHManalysis(speechFile: str, paramFile: str, ignoreSWIPEP: bool = True, pr
                     sp_i = []
         deterministic_part = ss 
     else:
-        if printPrompts:
-            print('Full waveform length analysis is performed.')
         for i, p in enumerate(P):
             if p.ti > pawsample/2 and p.isSpeech and (not p.isVoiced) and p.ti < length - pawsample/2:
                 P[i].isVoiced = True
@@ -200,15 +198,6 @@ def eaQHManalysis(speechFile: str, paramFile: str, ignoreSWIPEP: bool = True, pr
                 P[i].isSpeech = True
                 P[i].isVoiced = True
         deterministic_part = s
-        
-    if printPrompts:
-        print('Filename: {}'.format(speechFile))
-        print('Duration: {} sec'.format(round(length/fs)))
-        print('Maximum Voiced Frequency: {} Hz'.format(Fmax))
-        print('Maximum Partials: {}'.format(Kmax))
-        print('Analysis step: {} samples ({} sec)\n'.format(step, step/fs))
-        print('Maximum number of adaptations: {}'.format(maxAdpt))
-        print('Gender: {}\n'.format(gender))
 
     ti = arange(1,length,step)
     No_ti = len(ti)
@@ -363,8 +352,6 @@ def eaQHManalysis(speechFile: str, paramFile: str, ignoreSWIPEP: bool = True, pr
                         if not options["extended_aQHM"]:
                             ak_tmp, bk_tmp, aSNR[m][i] = aqhmLS_complexamps(s[n + tith], fm_tmp, win, fs)
                         else:
-                            #am_tmp = concatenate((flipud(am_tmp), tmp_zeros, am_tmp), axis=1)
-                            
                             ak_tmp, bk_tmp, aSNR[m][i] = eaqhmLS_complexamps(s[n + tith], am_tmp, fm_tmp, win, fs)
                         
                         df_tmp = fs/(2*pi)*divide(multiply(real(ak_tmp), imag(bk_tmp)) - multiply(imag(ak_tmp), real(bk_tmp)), abs(ak_tmp)**2)
@@ -441,7 +428,6 @@ def eaQHManalysis(speechFile: str, paramFile: str, ignoreSWIPEP: bool = True, pr
                 else:
                     idx1_tmp = concatenate((arange(0, (min_interp_size-len(idx1))*step, step), idx1)) 
                     
-                    #assert(len(idx1_tmp) == min_interp_size)
                     fm_hat[idx2, k] = interp1d(idx1_tmp, fm_hat[idx1_tmp, k], kind=3)(idx2)
                 
                 pm_hat[idx2, k]= phase_integr_interpolation(2*pi/fs*fm_hat[:, k], pm_hat[:, k], idx1)
@@ -486,89 +472,86 @@ def eaQHManalysis(speechFile: str, paramFile: str, ignoreSWIPEP: bool = True, pr
     S = []
     if not options['fullWaveform']:
         #----NOT TESTED----
-        try:
-            from scikits.talkbox import lpc 
-            from numpy.fft import fft
-            from scipy.signal import filtfilt
-            from structs import Stochastic
-            
-            S = [Stochastic() for _ in range(No_ti)]
-            
-            s_noi = s - s_hatT
-            
-            s_noi = ellipFilter(s, fs, 1500)
-            
-            M = 25
-            s_env = maxfilt(abs(s), 9)
+        from scikits.talkbox import lpc
+        from numpy.fft import fft
+        from scipy.signal import filtfilt
+        from structs import Stochastic
+        from misc import maxfilt, peak_picking
         
-            s_noi_env = filtfilt(ones(M)/M, 1, abs(s_noi));    
-            
-            V.noi_env = s_noi_env
-            
-            step = 5*fs/1000
-            winLen1 = 30*fs/1000+1
-            N1 = (winLen1-1)/2
-            n1 = arange(-N1, N1+1)
-            winLen2 = 25*fs/1000+1
-            N2 = (winLen2-1)/2
-            n2 = arange(-N2, N2+1)
-            win2 = hamming(winLen2)
-            nf_win2 = sum(win2)
-            
-            LPCord = 20
-            NFFT = 1024
-            NoS = 4
-            
-            ti = arange(1,length,step)
-            No_ti = len(ti)
-            
+        S = [Stochastic() for _ in range(No_ti)]
+        
+        s_noi = s - s_hatT
+        
+        s_noi = ellipFilter(s, fs, 1500)
+        
+        M = 25
+        s_env = maxfilt(abs(s), 9)
+    
+        s_noi_env = filtfilt(ones(M)/M, 1, abs(s_noi));    
+        
+        V.noi_env = s_noi_env
+        
+        step = 5*fs/1000
+        winLen1 = 30*fs/1000+1
+        N1 = (winLen1-1)/2
+        n1 = arange(-N1, N1+1)
+        winLen2 = 25*fs/1000+1
+        N2 = (winLen2-1)/2
+        n2 = arange(-N2, N2+1)
+        win2 = hamming(winLen2)
+        nf_win2 = sum(win2)
+        
+        LPCord = 20
+        NFFT = 1024
+        NoS = 4
+        
+        ti = arange(1,length,step)
+        No_ti = len(ti)
+        
+        if loadingScreen:
+            stochloop = tqdm(total=No_ti, position=0, leave=True)
+        for i, tith in enumerate(ti):
             if loadingScreen:
-                stochloop = tqdm(total=No_ti, position=0, leave=True)
-            for i, tith in enumerate(ti):
-                if loadingScreen:
-                    stochloop.set_description("Stochastic Part".format(i))
-                if tith > N1 and tith < length-N1:
-                    p_i = (tith)/p_step
-                    
-                    pf_i = int(p_i)
-                    
-                    if P[pf_i-1].isSpeech and P[pf_i].isSpeech:
-                        if (not P[pf_i-1].isVoiced) and (not P[pf_i].isVoiced):
-                            noi_tmp = s[tith + n1 - 1]
-                            s_env_tmp = s_env[tith + n2 - 1]
-                        else:
-                            noi_tmp = s_noi[tith + n1 - 1]
-                            s_env_tmp = s_noi_env[tith + n2 - 1]
-                        
-                        ap, g = lpc(noi_tmp, LPCord)
-                        
-                        s_env_tmp = multiply(s_env_tmp, win2)
-                        S_env = fft(concatenate((s_env_tmp[N2:], zeros((NFFT-winLen2, 1)), s_env_tmp[0:N2-1])), NFFT)/nf_win2
-                        am_s, fr_s = peak_picking(abs(S_env[0:NFFT/2]))
-                        idx = sorted(am_s, reverse=True)
-                        am_s = concatenate(([S_env[1]/2], S_env[fr_s[idx[0:min(NoS, len(idx))]]]))
-                        fm_s = concatenate(([0], fr_s[idx[0:min(NoS,len(idx))]]-1))*fs/NFFT
-                        
-                        S[i] = Stochastic(ti=tith-1, isSpeech=True, ap = ap, env_ak = abs(am_s), env_fk = fm_s, env_pk = angle(am_s))
+                stochloop.set_description("Stochastic Part".format(i))
+            if tith > N1 and tith < length-N1:
+                p_i = (tith)/p_step
+                
+                pf_i = int(p_i)
+                
+                if P[pf_i-1].isSpeech and P[pf_i].isSpeech:
+                    if (not P[pf_i-1].isVoiced) and (not P[pf_i].isVoiced):
+                        noi_tmp = s[tith + n1 - 1]
+                        s_env_tmp = s_env[tith + n2 - 1]
                     else:
-                        S[i] = Stochastic(ti=tith-1, isSpeech=False)
+                        noi_tmp = s_noi[tith + n1 - 1]
+                        s_env_tmp = s_noi_env[tith + n2 - 1]
+                    
+                    ap, g = lpc(noi_tmp, LPCord)
+                    
+                    s_env_tmp = multiply(s_env_tmp, win2)
+                    S_env = fft(concatenate((s_env_tmp[N2:], zeros((NFFT-winLen2, 1)), s_env_tmp[0:N2-1])), NFFT)/nf_win2
+                    am_s, fr_s = peak_picking(abs(S_env[0:NFFT/2]))
+                    idx = sorted(am_s, reverse=True)
+                    am_s = concatenate(([S_env[1]/2], S_env[fr_s[idx[0:min(NoS, len(idx))]]]))
+                    fm_s = concatenate(([0], fr_s[idx[0:min(NoS,len(idx))]]-1))*fs/NFFT
+                    
+                    S[i] = Stochastic(ti=tith-1, isSpeech=True, ap = ap, env_ak = abs(am_s), env_fk = fm_s, env_pk = angle(am_s))
                 else:
                     S[i] = Stochastic(ti=tith-1, isSpeech=False)
-                if loadingScreen:
-                    stochloop.update(1)
-        
+            else:
+                S[i] = Stochastic(ti=tith-1, isSpeech=False)
             if loadingScreen:
-                stochloop.close()
-        except ModuleNotFoundError:
-            print("Stochastic part skipped: 'pip install scikits' is required")
+                stochloop.update(1)
+    
+        if loadingScreen:
+            stochloop.close()
     endTime = strftime("%H:%M:%S", gmtime(time() - startTime))
     if printPrompts:        
         print('Signal adapted to {} dB SRER'.format(round(max(SRER), 6)))
-        #endTime = strftime("%H:%M:%S", gmtime(time() - startTime))
         print('Total Time: {}\n\n'.format(strftime("%H:%M:%S", gmtime(time() - startTime))))
     
-    return round(max(SRER), 6), endTime, m+1
-    #return D, S, V, SRER, aSNR
+    #return round(max(SRER), 4), endTime, m+1
+    return D, S, V, SRER, aSNR
 
 def eaQHMsynthesis(D, S, V, printPrompts: bool = True, loadingScreen: bool = True):
     '''
@@ -624,8 +607,8 @@ def eaQHMsynthesis(D, S, V, printPrompts: bool = True, loadingScreen: bool = Tru
     qh = a_0
     
     if printPrompts:
-        print('extended Adaptive Quasi-Harmonic Analysis initates\n')
-        print('Performing synthesis of filename {}'.format(V.filename))
+        print('Performing extended adaptive Quasi Harmonic Model synthesis in file: {}'.format(V.filename))
+
     
     if loadingScreen:
         synthesisloop = tqdm(total=Kmax, position=0, leave=True)
@@ -659,7 +642,6 @@ def eaQHMsynthesis(D, S, V, printPrompts: bool = True, loadingScreen: bool = Tru
             else:
                 idx1_tmp = concatenate((arange(0, (min_interp_size-len(idx1))*step, step), idx1)) 
                 
-                #assert(len(idx1_tmp) == min_interp_size)
                 fm[idx2, k] = interp1d(idx1_tmp, fm[idx1_tmp, k], kind=3)(idx2)
             
             pm_tmp[idx2, k]= phase_integr_interpolation(2*pi/fs*fm[:, k], pm[:, k], idx1)
@@ -705,43 +687,6 @@ def eaQHMsynthesis(D, S, V, printPrompts: bool = True, loadingScreen: bool = Tru
     
     return s, qh, noi
 
-def smooth(t, s, windur=0.1):
-    '''
-    Smooths the signal using median filtering and zero-phase filter
-    
-    ----INPUT PARAMETERS----
-    1) t: array - The time 
-    2) s: array - The signal 
-    3) windur: float - Defines the order of the window
-    
-    ----OUTPUT PARAMETERS----
-    The smoothed signal
-    '''
-    from scipy.signal import filtfilt
-    order = round(windur/median(diff(t))/2)*2+1
-    
-    if order > 1:
-        s = medfilt(s, int(order))
-        
-        medvalue = median(s)
-            
-        if ceil(order/2)>1:
-            vals1 = s
-            lenori = len(vals1)
-            inds = arange(0, lenori)
-
-            if lenori<3*order/2:
-                length = int(round(2*order/2))
-                vals1 = concatenate((medvalue*ones((length,1)), vals1, medvalue*ones((length,1))))
-                inds = arange(length+1, len(vals1)-length+1)
-            win = blackman(ceil(order/2))
-            win = win/sum(win)
-            vals1 = filtfilt(win,1,vals1)
-            vals1 = vals1[inds]
-            if lenori != len(vals1):
-                raise ValueError('length mismatch: {}, {}'.format(lenori, len(vals1)))
-            return vals1   
-        
 def iqhmLS_complexamps(s, fk, win, fs: int, iterates: int = 0):
     '''
     Computes iteratively the parameters of first order complex polynomial
@@ -955,76 +900,43 @@ def phase_integr_interpolation(fm_hat, pm_hat, idx):
 
     return pm_final
 
-def maxfilt(x, p):
+def smooth(t, s, windur=0.1):
     '''
-    Performs maxian filtering of order p.
+    Smooths the signal using median filtering and zero-phase filter
     
     ----INPUT PARAMETERS----
-    1) x: array - The signal 
-    2) p: int - The order of the filter
+    1) t: array - The time 
+    2) s: array - The signal 
+    3) windur: float - Defines the order of the window
     
     ----OUTPUT PARAMETERS----
-    The filtered signal
+    The smoothed signal
     '''
-    #----NOT TESTED----
-    xt = transpose(x)
-    L = len(xt)
-    
-    ad = (p-1)/2
-    if ad == 0:
-        return xt
-    from scipy.linalg import toeplitz
-    x = concatenate((x[0]*ones(ad), xt, x[L]*ones(ad)))
-    
-    A = fliplr(toeplitz(fliplr(x[1:L]), x[L:L+p-1]))
-    
-    return max(A)
+    from scipy.signal import filtfilt
+    from statistics import median
+    order = round(windur/median(diff(t))/2)*2+1
 
-def medfilt(x, p):
-    '''
-    Performs median filtering of order p.
-    
-    ----INPUT PARAMETERS----
-    1) x: array - The signal 
-    2) p: int - The order of the filter
-    
-    ----OUTPUT PARAMETERS----
-    The filtered signal
-    '''
-    xt = transpose1dArray(x)
-    L = len(xt)
+    if order > 1:
+        s = medfilt(s, int(order))
 
-    ad = (p-1)/2
-    if ad == 0:
-        return xt
-    from scipy.linalg import toeplitz
-    x = concatenate((x[0]*ones(int(ad)), x, x[L-1]*ones(int(ad))))
-    
-    A = fliplr(toeplitz(flipud(x[0:L]), x[L:L+p-1]))
-    Amed = []
-    for i in range(len(A)):
-        Amed.append(median(A[i]))
-    return Amed
+        medvalue = median(s)
 
-def peak_picking(x):
-    '''
-    Performs peak picking on a signal.
+        if ceil(order/2)>1:
+            vals1 = s
+            lenori = len(vals1)
+            inds = arange(0, lenori)
 
-    ----INPUT PARAMETERS----
-    x: array - The signal
-
-    ----OUTPUT PARAMENTERS----
-    1) x_max: the values of the peaks
-    2) x_pos: the location of the peaks (in samples) 
-    '''
-    #----NOT TESTED----
-    end = len(x)-1
-    lDiff = x[1:end-1]-x[0:end-2]
-    rDiff = x[2:end]-x[1:end-1]
-    
-    x_pos = argwhere(lDiff > 0 and rDiff < 0)
-    x_max = x[x_pos]
-    return x_max, x_pos
+            if lenori<3*order/2:
+                length = int(round(2*order/2))
+                vals1 = concatenate((medvalue*ones((length,1)), vals1, medvalue*ones((length,1))))
+                inds = arange(length+1, len(vals1)-length+1)
+            win = blackman(ceil(order/2))
+            win = win/sum(win)
+            vals1 = filtfilt(win,1,vals1)
+            vals1 = vals1[inds]
+            if lenori != len(vals1):
+                raise ValueError('length mismatch: {}, {}'.format(lenori, len(vals1)))
+            return vals1
 
 def voicedUnvoicedFrames(s, fs, gender):
     '''
@@ -1039,7 +951,6 @@ def voicedUnvoicedFrames(s, fs, gender):
     if they are voiced and if they are speech.
     2) p_step: The step of the frames.
     '''
-    from structs import Frame
     s = ellipFilter(transpose(s)[0], fs, 30)
     
     length = len(s)
@@ -1106,55 +1017,33 @@ def swipep2(x, fs, speechFile, opt, printPrompts: bool = True, loadingScreen: bo
     ----OUTPUT PARAMETERS----
     An array containing the time instants, the estimation for each instant and the strength of each estimation.
     '''
-    from numpy import hanning, power, empty, polyfit, polyval, e, nan
-    from scipy.signal import spectrogram, stft
-    #from matlab import specgram
-    from matplotlib.pyplot import title, xlabel, ylabel
-    from matplotlib.mlab import specgram
-    from debug import printIfCond, compare#
-    from misc import matToObject
-    from misc import myHann, arrayMax, spline_interp, mySpecgram
-    
-    debugSwipep = False
-    workspace = matToObject('../thesis_files/workspaces/swipepEnd.mat')
-    
-    #printIfCond(debugSwipep, 'x difference: ', compare(x, workspace['x']))
-    #printIfCond(debugSwipep, 'fs difference: ', compare(fs, workspace['fs']))
+    from numpy import power, empty, polyfit, polyval, nan
+    from misc import myHann, arrayMax, mySpecgram
     
     t = arange(0, len(x)/fs+opt['dt'], opt['dt'])
-    #printIfCond(debugSwipep, 't difference: ', compare(t, workspace['t'].transpose()[0]))
     
     log2pc = arange(log2(opt['plim'][0]), log2(opt['plim'][1]), opt['dlog2p'])
-    #printIfCond(debugSwipep, 'log2pc difference: ', compare(log2pc, workspace['log2pc'].transpose()[0]))
                 
     pc = power(2, log2pc)
-    #printIfCond(debugSwipep, 'pc difference: ', compare(pc, workspace['pc'].transpose()[0]))
     
     S = zeros((len(pc), len(t)))
     
     logWs = apply(log2(divide(8*fs, opt['plim'])), round)
-    #printIfCond(debugSwipep, 'logWs difference: ', compare(logWs, workspace['logWs']))
     
     ws = power(2, arange(logWs[0], logWs[1]-1, -1))
-    #printIfCond(debugSwipep, 'ws difference: ', compare(ws, workspace['ws']))
     
     pO = divide(8*fs,ws)
-    #printIfCond(debugSwipep, 'pO difference: ', compare(pO, workspace['pO']))
     
     d = 1 + log2pc - log2(pO[0])
-    #printIfCond(debugSwipep, 'd difference: ', compare(d, workspace['d']))
     
     fERBs = erbs2hz(arange(hz2erbs(min(pc)/4), hz2erbs(fs/2), opt['dERBs']))
-    #printIfCond(debugSwipep, 'fERBs difference: ', compare(fERBs, workspace['fERBs']))
     
     if loadingScreen:
         wsloop = tqdm(total=len(ws), position=0, leave=True)
                       
     for i in range(len(ws)):
-        #printIfCond(debugSwipep, "----i: ", i)
         if loadingScreen:
             wsloop.set_description("SWIPEP".format(i))
-        workspaceSpec = matToObject('../thesis_files/workspaces/swipep_in_i_1.mat') 
         
         dn = int(max(1, round(8*(1-opt['woverlap'])*fs/pO[i])))
         
@@ -1165,27 +1054,14 @@ def swipep2(x, fs, speechFile, opt, printPrompts: bool = True, loadingScreen: bo
         
         X, f, ti = mySpecgram(xzp, int(ws[i]), fs, w, o)
 
-        '''printIfCond(debugSwipep, 'dn difference: ', compare(dn, workspaceSpec['dn']))
-        printIfCond(debugSwipep, 'xzp difference: ', compare(xzp, workspaceSpec['xzp']))
-        printIfCond(debugSwipep, 'w difference: ', compare(w, workspaceSpec['w'].transpose()[0], ignoreZeros=True))
-        printIfCond(debugSwipep, 'o difference: ', compare(o, workspaceSpec['o']))
-        printIfCond(debugSwipep, 'f difference: ', compare(f, workspaceSpec['f']))
-        printIfCond(debugSwipep, 'X difference: ', compare(X, workspaceSpec['X']))
-        printIfCond(debugSwipep, 'ti difference: ', compare(ti, workspaceSpec['ti']))
-        '''
         ip = i+1
         if len(ws) == 1:
             j = transpose1dArray(apply(pc, int))
             k = []
         elif i == len(ws)-1:
-            #j = argwhere(d - i > 0)
-            #k = argwhere(d[j] - i < 1)
             j = argwhere(d - ip > -1)
             k = argwhere(d[j] - ip < 0)
         elif i == 0:
-            #j = argwhere(d - i < 2)
-            #k = argwhere(d[j] - i > 1)
-            
             j = argwhere(d - ip < 1)
             k = argwhere(d[j] - ip > 0)
         else:
@@ -1193,26 +1069,9 @@ def swipep2(x, fs, speechFile, opt, printPrompts: bool = True, loadingScreen: bo
             k = arange(0, len(j))
         
         fERBs = fERBs[singlelize(argwhere(fERBs > pc[j[0]]/4)[0]):]
-        #printIfCond(debugSwipep, 'fERBs difference: ', compare(fERBs, workspaceSpec['fERBs']))
-        
-        #L = interp1d(f, transpose(abs(X)), kind=3, fill_value=0)(fERBs)
-        '''L0 = []
-        for i in range(len(X[0])):
-            L0.append(spline_interp(f, abs(X[:, i]), fERBs))
-            
-        L2 = sqrt(arrayMax(0, asarray(L0).transpose()))'''
         
         L = sqrt(arrayMax(0, interp1d(f, abs(X), kind=3, fill_value=0, axis=0)(fERBs)))
-        '''for xi in range(len(L)):
-            for xj in range(len(L[xi])):
-                if L[xi][xj] < 0:
-                    L[xi][xj] = 0.0#10e-20#0.0
-                else:
-                    L[xi][xj] = sqrt(float64(L[xi][xj]))
-        #
-        L[L==0] = 10e-20'''
-        printIfCond(debugSwipep, 'L difference: ', compare(L, workspaceSpec['L']))
-        
+       
         Si = pitchStrengthAllCandidates(fERBs, L, pc[j]) 
         
         if len(Si[0]) > 1:
@@ -1220,41 +1079,22 @@ def swipep2(x, fs, speechFile, opt, printPrompts: bool = True, loadingScreen: bo
         else:
             Si = empty((len(Si), len(t)), dtype=object)
             
-        #printIfCond(debugSwipep, 'Si difference: ', compare(Si, workspaceSpec['Si']))
-        
         if isContainer(k[0]):
             k = k[:, 0]
-        #printIfCond(debugSwipep, 'k difference: ', compare(k, workspaceSpec['k'].transpose()[0]))
         
         lamda = d[ j[k] ] - (i+1)
-        #printIfCond(debugSwipep, 'lamda difference: ', compare(lamda, workspaceSpec['lambda']))
         
         mu = ones( len(j) )
         mu[k] = 1 - abs( transpose(lamda) )
-        #printIfCond(debugSwipep, 'mu difference: ', compare(mu, workspaceSpec['mu']))
         
         S[transpose(j)[0],:] += multiply(transpose(tile(mu,(len(Si[1]), 1))), Si)
         
         if loadingScreen:
             wsloop.update(1)
            
-    #printIfCond(debugSwipep, "----end of loop")
     if loadingScreen:
         wsloop.close()
        
-    '''printIfCond(debugSwipep, 'dn difference: ', compare(dn, workspace['dn']))
-    printIfCond(debugSwipep, 'xzp difference: ', compare(xzp, workspace['xzp']))
-    printIfCond(debugSwipep, 'w difference: ', compare(w, workspace['w'].transpose()[0], ignoreZeros=True))
-    printIfCond(debugSwipep, 'o difference: ', compare(o, workspace['o']))
-    printIfCond(debugSwipep, 'f difference: ', compare(f, workspace['f']))
-    printIfCond(debugSwipep, 'ti difference: ', compare(ti, workspace['ti']))
-    printIfCond(debugSwipep, 'X difference: ', compare(X, workspace['X'], ignoreZeros=True, ignoreSign=True))
-    printIfCond(debugSwipep, 'fERBs difference: ', compare(fERBs, workspace['fERBs']))
-    printIfCond(debugSwipep, 'L difference: ', compare(L, workspace['L'].transpose(), ignoreZeros=True))
-    printIfCond(debugSwipep, 'Si difference: ', compare(Si, workspace['Si']))
-    printIfCond(debugSwipep, 'lamda difference: ', compare(lamda, workspace['lambda']))
-    printIfCond(debugSwipep, 'mu difference: ', compare(mu, workspace['mu']))
-    '''
     p = empty((len(S[0]), 1), dtype=object)
     s = empty((len(S[0]), 1), dtype=object)
     for j in range(len(S[0])):
@@ -1280,26 +1120,10 @@ def swipep2(x, fs, speechFile, opt, printPrompts: bool = True, loadingScreen: bo
             k = singlelize(argwhere(arr == s[j]))
             p[j] = power(2, log2(pc[I[0]]) + k/12/100)
     
-    #printIfCond(debugSwipep, 'j difference: ', compare(j, workspace['j']))
-    #printIfCond(debugSwipep, 'k difference: ', compare(k, workspace['k']))
-    printIfCond(debugSwipep, 't difference: ', compare(transpose1dArray(t), workspace['t']))
-    printIfCond(debugSwipep, 'p difference: ', compare(p, workspace['p']))
-    printIfCond(debugSwipep, 's difference: ', compare(s, workspace['s']))
-    
     return concatenate((transpose1dArray(t), p, s), axis=1)
 
 def pitchStrengthAllCandidates(f, L, pc):
-    from debug import printIfCond, compare
-    from misc import matToObject
     from copy import deepcopy
-    
-    debugAllC = False
-    workspace = matToObject('../thesis_files/workspaces/allCand_in_i_1.mat')
-    printIfCond(debugAllC, '----pitchStrengthAllCandidates')
-    
-    printIfCond(debugAllC, 'f difference: ', compare(f, workspace['f'].transpose()[0]))
-    printIfCond(debugAllC, 'L difference: ', compare(L, workspace['L']))
-    printIfCond(debugAllC, 'pc difference: ', compare(pc, workspace['pc']))
     
     S = zeros((len(pc), len(L[1])))
     k = zeros(len(pc)+1, dtype=int)
@@ -1308,47 +1132,24 @@ def pitchStrengthAllCandidates(f, L, pc):
         
 
     k = k[1:]
-    printIfCond(debugAllC, 'k difference: ', compare(k, workspace['k'], ignoreZeros=True))
     
     N = sqrt(flipud(cumsum(flipud(multiply(L,L)), axis=0)))
-    printIfCond(debugAllC, 'N difference: ', compare(N, workspace['N']))
     
     for j in range(len(pc)):
         n = float64(deepcopy(N[k[j], :]))
-        #for ni in range(len(n)):
-        #    if n[ni] == 0:
-        #        n[ni] = inf
-        n[n==0] = inf#10e10#inf
+        n[n==0] = inf
         NL = L[k[j]:,:] / tile( n, (len(L)-k[j], 1))
         S[j,:] = pitchStrengthOneCandidate(f[k[j]:], NL, pc[j])
-    
-    printIfCond(debugAllC, 'n difference: ', compare(n, workspace['n'], ignoreZeros=True))
-    printIfCond(debugAllC, 'NL difference: ', compare(NL, workspace['NL'], ignoreZeros=True))
-    printIfCond(debugAllC, 'S difference: ', compare(S, workspace['S']))
     
     return S
 
 def pitchStrengthOneCandidate(f, NL, pc):
-    #from debug import printIfCond, compare
-    #from misc import matToObject
-    
-    #debugOneC = True
-    #workspace = matToObject('../thesis_files/workspaces/oneCand_in_j_1.mat')
-    #printIfCond(debugOneC, '----pitchStrengthOneCandidate')
-    
-    #printIfCond(debugOneC, 'f difference: ', compare(f, workspace['f'].transpose()[0]))
-    #printIfCond(debugOneC, 'NL difference: ', compare(NL, workspace['NL'], ignoreZeros=True))
-    #printIfCond(debugOneC, 'pc difference: ', compare(pc, workspace['pc']))
-    
     n = int(singlelize(fix( end(f)/pc - 0.75 )))
     if n==0:
         return None
     
-    #printIfCond(debugOneC, 'n difference: ', compare(n, workspace['n']))
-    
     k = zeros(len(f))
     q = f / pc
-    #printIfCond(debugOneC, 'q difference: ', compare(q, workspace['q']))
     
     pr = concatenate(([1], primes(n)))
     for i in pr:
@@ -1359,7 +1160,6 @@ def pitchStrengthOneCandidate(f, NL, pc):
         k[v] = k[v] + cos( 2*pi * q[v] ) / 2
     k = k * apply(1/f, sqrt)
     k = k / norm( k[k>0] )
-    #printIfCond(debugOneC, 'k difference: ', compare(k, workspace['k']))
     
     return dot(transpose(k), NL)
 
@@ -1404,7 +1204,7 @@ def getLinear(v, t):
             g = (t-times[previ])/(times[nexti]-times[previ])
 
             if g<0 or g>1:
-                raise ValueError('linearity factor unbound, g not in [0;1]')
+                raise ValueError('linearity factor unbound, g not in [0, 1]')
             
             value = v[previ, 1:]*(1-g) + v[nexti, 1:]*g;
     return value

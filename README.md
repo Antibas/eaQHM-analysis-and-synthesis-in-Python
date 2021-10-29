@@ -40,11 +40,14 @@ What you have to do is:
 5. Give as input the plain name (no path or *.wav*) of the file to be processed in the console.
 6. After the program terminates, a "*\*filename\*_reconstructed.wav*" file will be generated in the ```root``` path.
 
-Here is an example of the output of the code running the "SA19" parameter file in [Spyder](https://www.spyder-ide.org/):
+Here is an example of the output of the code running the "SA19.wav" file in [Spyder](https://www.spyder-ide.org/):
 
-![](img/SA19out1.JPG)
-![](img/SA19out2.JPG)
-![](img/SA19out3.JPG)
+![](img/SA19out.JPG)
+
+And here are the plots produced:
+
+![](img/frequencySpec.PNG)
+![](img/timeDom.PNG)
 
 ## Prerequisites & Requirements
 **Python 3.8.3** and up. It is also highly suggested to use [Spyder](https://www.spyder-ide.org/) environment as the whole code was tested in it. Before you run, make sure to install all requirements by executing:
@@ -54,7 +57,7 @@ pip install -r requirements.txt
 
 ## Known Issues
 * This code takes a lot of time, due to the nature of **Python** language, even for small speech files.
-* The results are 3-5 dB lower than expected, which is though not a big issue. This is due to the usage of [SWIPEP pitch estimator](ADDLINK) which produces different results in pitch estimations.
+* The results may be different than expected if [SWIPEP pitch estimator](ADDLINK) is used instead of extracting the pitch estimations from the parameter files.
 * At the time of publication, certain sections of the code have not been tested. Those parts that are inaccessible based on the majority of the parameters given are marked with the phrase:
 ```Python
 #----NOT TESTED----

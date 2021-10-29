@@ -8,13 +8,12 @@ from scipy.io import loadmat
 
 from numpy import asarray, ndarray, zeros, transpose, flip, power, complex128, \
 uint8, int8, int16, int32, int64, float16, float32, float64, arange, cos, pi, \
-fix, multiply, imag, tile
+fix, multiply, imag, tile, sqrt, concatenate, fliplr, flipud, ones, logical_and
 
+from statistics import median
 from scipy.signal import ellip, filtfilt
 
 from math import log2
-
-from sympy import isprime
 
 from copy import deepcopy
 
@@ -45,7 +44,7 @@ def matToObject(filename: str):
     return obj
 
 
-def loadOptions(filename: str = "", ignoreSWIPEP: bool = False):
+def loadOptions(filename: str = ""):
     '''
     Loads a parameter file with name filename to
     load the options of eaQHManalysis. 
@@ -72,7 +71,7 @@ def loadOptions(filename: str = "", ignoreSWIPEP: bool = False):
                 "fullBand": opt[0][0][2][0][0] == 1,
                 "extended_aQHM": opt[0][0][3][0][0] == 1,
                 "highPassFilter": opt[0][0][6][0][0] == 1,
-                "SWIPEP": opt[0][0][8][0][0] == 1 and not ignoreSWIPEP,
+                "SWIPEP": opt[0][0][8][0][0] == 1,
                 "numPartials": opt[0][0][10][0][0]
             }
     else:
@@ -81,7 +80,7 @@ def loadOptions(filename: str = "", ignoreSWIPEP: bool = False):
                 "fullBand": True,
                 "extended_aQHM": True,
                 "highPassFilter": False,
-                "SWIPEP": True and not ignoreSWIPEP,
+                "SWIPEP": True,
                 "numPartials": 0
             }
     return obj
@@ -234,15 +233,20 @@ def apply(v, lamda):
         return asarray(vv)
     raise TypeError(type(v))   
 
+def is_prime(n):
+    """
+    Function to check if the number is prime or not.
+    """
+    for i in range(2, int(sqrt(n)) + 1):
+        if n % i == 0:
+            return False
+    return True
+
 def primes(N):
     '''
     Returns a row vector of prime numbers up to n.
     '''
-    p = []
-    for n in range(N):
-        if isprime(n):
-            p.append(n)
-    return asarray(p)
+    return asarray([n for n in range(N) if is_prime(n)])
 
 def hz2erbs(hz):
     '''
@@ -317,75 +321,6 @@ def myHann(N):
     n = arange(1, N)
     return .5*(1 - cos(2*pi*n/N))
 
-def spline_interp(x, y, xn):
-    N = len(x)
-    M = len(xn)
-    
-    y2 = spline(x, y)
-    yf = zeros(M)
-    
-    for i in range(M):
-        tmp = xn[i]
-        if tmp < x[1]:
-            yf[i] = y[1]
-            continue
-        elif tmp > x[N-1]:
-            yf[i] = y[N-1]
-            continue
-        else:
-            yf[i] = splint(x, y, y2, tmp)
-    
-    return yf
-
-def spline(x, y):
-    n = len(x)
-    u = zeros(n-1)
-    
-    y2 = zeros(n)
-    
-    y2[1] = 0.5
-    u[1] = (3/(x[2]-x[1]))*((y[2]-y[1])/(x[2]-x[1]))
-    
-    for i in range(2, n-1):
-        sig = (x[i] - x[i-1])/(x[i+1] - x[i-1])
-        p = sig*y2[i-1] + 2.0
-        y2[i] = (sig - 1.0)/p
-        u[i] = (y[i+1] - y[i])/(x[i+1] - x[i]) - (y[i] - y[i-1])/(x[i] - x[i-1])
-        u[i] = (6.0*u[i]/(x[i+1] - x[i-1]) - sig*u[i-1])/p
-    
-    qn = 0.5
-    un = (3.0/(x[n-1] - x[n-2])) * (-(y[n-1] - y[n-2])/(x[n-1] - x[n-2]))
-    
-    y2[n-1] = (un - qn*u[n-2])/(qn*y2[n-2] + 1.0)
-    
-    for k in range(n-1, 1, -1):
-        y2[k-1] = y2[k-1]*y2[k] + u[k-1]
-    
-    return y2
-
-def splint(x, y, y2, xv):
-    n = len(x)
-    klo = 1 
-    khi = n
-    
-    while khi - klo > 1:
-        k = (khi + klo) >> 1
-        if (x[k] > xv): 
-            khi = k
-        else:
-            klo = k
-    
-    h = x[khi] - x[klo]
-    
-    if h == 0:
-        raise ValueError("Bad x input to routine splint()!\n")
-    
-    a = (x[khi] - xv)/h
-    b = (xv - x[klo])/h
-    
-    y = a*y[klo] + b*y[khi] + ((a*a*a-a)*y2[klo] + (b*b*b-b)*y2[khi])*(h*h)/6.0
-    return y
-
 def mySpecgram(x,nfft,fs,window,noverlap):
     from numpy.fft import fft
                 
@@ -406,7 +341,6 @@ def mySpecgram(x,nfft,fs,window,noverlap):
     if len(x)<(nwind+colindex[ncol-1]-1):
         x[nwind+colindex[ncol-1]-2] = 0
     
-    #y = zeros((nwind, ncol))
     y = x[tile(transpose1dArray(rowindex), ncol)+tile(transpose1dArray(colindex), nwind).transpose()]
     
     y2 = multiply(tile(transpose1dArray(window), ncol), y)
@@ -426,4 +360,77 @@ def mySpecgram(x,nfft,fs,window,noverlap):
     f = (select)*fs/nfft
     t = colindex/fs
     return y3, f, t
+
+def maxfilt(x, p):
+    '''
+    Performs maxian filtering of order p.
+    
+    ----INPUT PARAMETERS----
+    1) x: array - The signal 
+    2) p: int - The order of the filter
+    
+    ----OUTPUT PARAMETERS----
+    The filtered signal
+    '''
+    #----NOT TESTED----
+    xt = transpose(x)
+    L = len(xt)
+    
+    ad = (p-1)/2
+    if ad == 0:
+        return xt
+    from scipy.linalg import toeplitz
+    x = concatenate((x[0]*ones(ad), xt, x[L]*ones(ad)))
+    
+    A = fliplr(toeplitz(fliplr(x[1:L]), x[L:L+p-1]))
+    
+    return max(A)
+
+def medfilt(x, p):
+    '''
+    Performs median filtering of order p.
+    
+    ----INPUT PARAMETERS----
+    1) x: array - The signal 
+    2) p: int - The order of the filter
+    
+    ----OUTPUT PARAMETERS----
+    The filtered signal
+    '''
+    xt = transpose1dArray(x)
+    L = len(xt)
+
+    ad = (p-1)/2
+    if ad == 0:
+        return xt
+    from scipy.linalg import toeplitz
+    x = concatenate((x[0]*ones(int(ad)), x, x[L-1]*ones(int(ad))))
+    
+    A = fliplr(toeplitz(flipud(x[0:L]), x[L:L+p-1]))
+    '''Amed = []
+    for i in range(len(A)):
+        Amed.append(median(A[i]))
+    return Amed'''
+    return [median(a) for a in A]
+
+def peak_picking(x):
+    '''
+    Performs peak picking on a signal.
+
+    ----INPUT PARAMETERS----
+    x: array - The signal
+
+    ----OUTPUT PARAMENTERS----
+    1) x_max: the values of the peaks
+    2) x_pos: the location of the peaks (in samples) 
+    '''
+    #----NOT TESTED----
+    end = len(x)-1
+    lDiff = x[1:end-1]-x[0:end-2]
+    rDiff = x[2:end]-x[1:end-1]
+    
+    x_pos = logical_and(lDiff > 0, rDiff < 0)
+    x_max = x[x_pos]
+    return x_max, x_pos
+
     
