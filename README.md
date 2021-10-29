@@ -13,6 +13,22 @@ This code is built upon a speech analysis and synthesis system named [ROBUST FUL
 ## eaQHMsynthesis
 **eaQHMsynthesis** does the exact opposite of **eaQHManalysis**, meaning it receives the output of the latter and performs **extended Adaptive Quasi-Harmonic Synthesis** in a signal. In other words, it extracts ```D```, ```S``` and ```V``` returned parameters from **eaQHManalysis** and resynthesizes the signal according to those parameters.
 
+## Release Notes
+### Version 1.0.0
+
+#### Features
+* Both **aQHM** and **eaQHM** are supported.
+* Preprocessing high pass filter option.
+* [SWIPEP pitch estimator](ADDLINK) is provided. 
+* Full-band analysis.
+* Either full waveform or only voiced parts are analyzed.
+* Plots are viewed showing the signal in time domain before and after reconstruction, as well as the signal's pitch estimations.
+* A basic loading screen may be viewed by setting 
+```Python
+loadingScreen=True
+```
+as a parameter in the functions, which will enable a [tqdm](https://tqdm.github.io/) loading bar in the console.
+
 ## Prerequisites & Requirements
 **Python 3.8.3** and up. It is also highly suggested to use [Spyder](https://www.spyder-ide.org/) environment as the whole code was tested in it. Before you run, make sure to install all requirements by executing:
 ```Python
