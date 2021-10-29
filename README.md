@@ -47,7 +47,7 @@ Here is an example of the output of the code running the "SA19.wav" file in [Spy
 And here are the plots produced:
 
 ![](img/frequencySpec.PNG)
-![](img/timeDom.PNG)
+![](img/timeDom.png)
 
 ## Prerequisites & Requirements
 **Python 3.8.3** and up. It is also highly suggested to use [Spyder](https://www.spyder-ide.org/) environment as the whole code was tested in it. Before you run, make sure to install all requirements by executing:
