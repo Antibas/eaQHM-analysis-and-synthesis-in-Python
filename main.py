@@ -27,7 +27,7 @@ def main():
     filename = input("Write the name of the file to be processed: ")
     gender = input("What gender is the speaker? ")
     #root = 'path/to/the/parameter_and_wav_files' #change according to the location of the files
-    root = ''
+    root = '../../thesis_files/mat_files/'
     Determ, Stoch, Var, SRER, aSNR = eaQHManalysis(root+filename+".wav", gender=gender, loadingScreen=False)
     signal = Var.s
     fs = Var.fs

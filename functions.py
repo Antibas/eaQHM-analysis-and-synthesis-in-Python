@@ -49,7 +49,7 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
     speechFile : str
         The location of the mono .wav file to be analysed.
     gender : str, optional
-        The gender of the speaker. The default is 'other'.
+        The gender of the speaker. Can also be 'child'. The default is 'other'.
     step : int, optional
         The step size of the processing in samples. The default is 15.
     maxAdpt : int, optional
@@ -114,6 +114,9 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
     elif gender == 'female':
         f0min = 160
         f0max = 300
+    elif gender == 'child':
+        f0min = 300
+        f0max = 600
     else:
         f0min = 70
         f0max = 500
