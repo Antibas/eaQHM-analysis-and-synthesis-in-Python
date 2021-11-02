@@ -8,10 +8,10 @@ The following repository is the source code corresponding to the thesis of **Pan
 This code is built upon a speech analysis and synthesis system named [ROBUST FULL-BAND ADAPTIVE SINUSOIDAL ANALYSIS AND SYNTHESIS OF SPEECH, by George P. Kafentzis, Olivier Rosec, Yannis Stylianou](https://www.csd.uoc.gr/~kafentz/Publications/Kafentzis%20G.P.,%20Rosec%20O.,%20and%20Stylianou%20Y.%20Robut%20Adaptive%20Sinusoidal%20Analysis%20and%20Synthesis%20of%20Speech.pdf). The system in the so-called **Extended Adaptive Quasi-Harmonic Model (eaQHM)** and this source code implements it into **Python**. The code consists mainly of functions that perform speech analysis, synthesis and interpolation and those of utmost significance are **eaQHManalysis** and **eaQHMsynthesis**.
 
 ## eaQHManalysis
-**eaQHManalysis** is a function that performs **extended adaptive Quasi-Harmonic Analysis** in a signal and decomposes speech into AM-FM components according to that model. In other words, it receives a *.wav* file and some other optional parameters and produces a [Deterministic](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.16.5702&rep=rep1&type=pdf) and optionally a [Stochastic](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.16.5702&rep=rep1&type=pdf) component of the signal by assuming an initially harmonic model by applying an ```f0``` estimation and then iteratively refining it, until the reconstructed signal converges in *quasi-harmonicity*.
+**eaQHManalysis** is a function that performs **extended adaptive Quasi-Harmonic Analysis** in a signal and decomposes speech into AM-FM components according to that model. In other words, it receives a *.wav* file and some other optional parameters and produces a [Deterministic](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.16.5702&rep=rep1&type=pdf) component of the signal by assuming an initially harmonic model by applying an ```f0``` estimation and then iteratively refining it, until the reconstructed signal converges in *quasi-harmonicity*.
 
 ## eaQHMsynthesis
-**eaQHMsynthesis** does the exact opposite of **eaQHManalysis**, meaning it receives the output of the latter and performs **extended Adaptive Quasi-Harmonic Synthesis** in a signal. In other words, it extracts ```D```, ```S``` and ```V``` returned parameters from **eaQHManalysis** and resynthesizes the signal.
+**eaQHMsynthesis** does the exact opposite of **eaQHManalysis**, meaning it receives the output of the latter and performs **extended Adaptive Quasi-Harmonic Synthesis** in a signal. In other words, it extracts the decomposed signal from **eaQHManalysis** and resynthesizes it.
 
 ## Prerequisites & Requirements
 **Python 3.8.x** and up. It is also highly suggested to use [Spyder](https://www.spyder-ide.org/) environment as the whole code was tested in it. Before you run, make sure to install all requirements by executing:
@@ -24,11 +24,10 @@ A *main.py* file is provided, which executes **eaQHManalysis** on a speech signa
 
 What you have to do is:
 1. Open *main.py*.
-2. In line ```28```, change ```root``` variable to the path of the folder of your choice.
-3. Run the code.
-4. Give as input the plain name (no path) of the *.wav* file to be processed in the console.
-5. Specify the gender of the speaker ("male", "female" or other) 
-6. After the program terminates, a *\*filename\*_reconstructed.wav* file will be generated in the ```root``` path.
+2. Run the code.
+3. Give as input the name of the *.wav* file to be processed in the console.
+4. Specify the gender of the speaker ("male", "female" or other). You may also use "child" as an input.
+5. After the program terminates, a *\*filename\*_reconstructed.wav* file will be generated.
 
 Here is an example of the output of the code running *SA19.wav* in [Spyder](https://www.spyder-ide.org/):
 

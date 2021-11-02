@@ -6,7 +6,7 @@ Created on Mon Feb  1 16:00:19 2021
 """
 from time import time, strftime, gmtime
 
-from structs import Deterministic, Various, Frame
+from structs import Deterministic, Frame
 from numpy import arange, zeros, blackman, hamming, \
 argwhere, insert, flipud, asarray, append, multiply, \
 real, imag, pi, divide, log10, log2, angle, diff, unwrap, sin, cos, \
@@ -49,7 +49,8 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
     speechFile : str
         The location of the mono .wav file to be analysed.
     gender : str, optional
-        The gender of the speaker. Can also be 'child'. The default is 'other'.
+        The gender of the speaker. Defines the pitch limit of SWIPEP. 'male' limit is [70, 180], 
+        'female' is [70, 180] and 'child' can also be used for [300, 600]. Any other input is [70, 500]. The default is 'other'.
     step : int, optional
         The step size of the processing in samples. The default is 15.
     maxAdpt : int, optional
@@ -77,14 +78,12 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
     -------
     Determ : (No_ti) array_like
         The Deterministic part of the signal. An array containing elements of Deterministic-class type.
-    Stoch : (No_ti) array_like
-        The Stochastic part of the signal. An array containing elements of Stochastic-class type. If fullWaveform == True, an empty array is returned.
-    Var : Various
-        Various important data.
     SRER : (maxAdpt+1) array_like
         An array containing all the adaptation numbers of the signal.
-    aSNR : (maxAdpt, No_ti) array_like
-        An array containing each SNR (Signal to Noise Ratio) of each time instant per adaptation.
+    Kmax : int
+        The number of partials used.
+    Fmax : int
+        The maximum frequency of the analysis.
 
     '''
     startTime = time()
@@ -180,8 +179,6 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
     No_ti = len(ti)
 
     Determ = [Deterministic() for _ in range(No_ti)]
-    Var = Various(s=s, fs=fs, fullBand=fullBand, Kmax=Kmax, Fmax=Fmax, filename=speechFile, fullWaveform=fullWaveform)
-    aSNR = zeros((maxAdpt, No_ti), float)
     SRER = zeros(maxAdpt+1, float)
     
     
@@ -227,7 +224,7 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
                         n = arange(-N[i]-1,N[i]) 
                         win = blackman(2*N[i]+1)
                         
-                        ak, bk, df, aSNR[m][i] = iqhmLS_complexamps(s[n + tith], fk, win, fs)
+                        ak, bk, df = iqhmLS_complexamps(s[n + tith], fk, win, fs)
                         
                         f0_val[tith-1] = f0
                     else:
@@ -327,9 +324,9 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
                             am_tmp = concatenate((flipud(transpose1dArray(am_tmp)), tmp_zeros, transpose1dArray(am_tmp)), axis=1)
                         
                         if not eaQHM:
-                            ak_tmp, bk_tmp, aSNR[m][i] = aqhmLS_complexamps(s[n + tith], fm_tmp, win, fs)
+                            ak_tmp, bk_tmp = aqhmLS_complexamps(s[n + tith], fm_tmp, win, fs)
                         else:
-                            ak_tmp, bk_tmp, aSNR[m][i] = eaqhmLS_complexamps(s[n + tith], am_tmp, fm_tmp, win, fs)
+                            ak_tmp, bk_tmp = eaqhmLS_complexamps(s[n + tith], am_tmp, fm_tmp, win, fs)
                         
                         df_tmp = fs/(2*pi)*divide(multiply(real(ak_tmp), imag(bk_tmp)) - multiply(imag(ak_tmp), real(bk_tmp)), abs(ak_tmp)**2)
                         
@@ -431,7 +428,6 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
         if m != 0:
             if SRER[m] <= SRER[m-1]:
                 break
-            Var.qh = s_hat
         a0_fin = a0_hat
         am_fin = am_hat
         fm_fin = fm_hat
@@ -446,90 +442,13 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
             Determ[i].fk = arrayByIndex(idx, fm_fin[ti, idx])
             Determ[i].pk = arrayByIndex(idx, pm_fin[ti, idx])
             
-    Stoch = []
-    if not fullWaveform:
-        #----NOT TESTED----
-        from scikits.talkbox import lpc
-        from numpy.fft import fft
-        from scipy.signal import filtfilt
-        from structs import Stochastic
-        from misc import maxfilt, peak_picking
-        
-        Stoch = [Stochastic() for _ in range(No_ti)]
-        
-        s_noi = s - s_hatT
-        
-        s_noi = ellipFilter(s, fs, 1500)
-        
-        M = 25
-        s_env = maxfilt(abs(s), 9)
-    
-        s_noi_env = filtfilt(ones(M)/M, 1, abs(s_noi));    
-        
-        Var.noi_env = s_noi_env
-        
-        step = 5*fs/1000
-        winLen1 = 30*fs/1000+1
-        N1 = (winLen1-1)/2
-        n1 = arange(-N1, N1+1)
-        winLen2 = 25*fs/1000+1
-        N2 = (winLen2-1)/2
-        n2 = arange(-N2, N2+1)
-        win2 = hamming(winLen2)
-        nf_win2 = sum(win2)
-        
-        LPCord = 20
-        NFFT = 1024
-        NoS = 4
-        
-        ti = arange(1,length,step)
-        No_ti = len(ti)
-        
-        if loadingScreen:
-            stochloop = tqdm(total=No_ti, position=0, leave=True)
-        for i, tith in enumerate(ti):
-            if loadingScreen:
-                stochloop.set_description("Stochastic Part".format(i))
-            if tith > N1 and tith < length-N1:
-                p_i = (tith)/p_step
-                
-                pf_i = int(p_i)
-                
-                if P[pf_i-1].isSpeech and P[pf_i].isSpeech:
-                    if (not P[pf_i-1].isVoiced) and (not P[pf_i].isVoiced):
-                        noi_tmp = s[tith + n1 - 1]
-                        s_env_tmp = s_env[tith + n2 - 1]
-                    else:
-                        noi_tmp = s_noi[tith + n1 - 1]
-                        s_env_tmp = s_noi_env[tith + n2 - 1]
-                    
-                    ap, g = lpc(noi_tmp, LPCord)
-                    
-                    s_env_tmp = multiply(s_env_tmp, win2)
-                    S_env = fft(concatenate((s_env_tmp[N2:], zeros((NFFT-winLen2, 1)), s_env_tmp[0:N2-1])), NFFT)/nf_win2
-                    am_s, fr_s = peak_picking(abs(S_env[0:NFFT/2]))
-                    idx = sorted(am_s, reverse=True)
-                    am_s = concatenate(([S_env[1]/2], S_env[fr_s[idx[0:min(NoS, len(idx))]]]))
-                    fm_s = concatenate(([0], fr_s[idx[0:min(NoS,len(idx))]]-1))*fs/NFFT
-                    
-                    Stoch[i] = Stochastic(ti=tith-1, isSpeech=True, ap = ap, env_ak = abs(am_s), env_fk = fm_s, env_pk = angle(am_s))
-                else:
-                    Stoch[i] = Stochastic(ti=tith-1, isSpeech=False)
-            else:
-                Stoch[i] = Stochastic(ti=tith-1, isSpeech=False)
-            if loadingScreen:
-                stochloop.update(1)
-    
-        if loadingScreen:
-            stochloop.close()
-
     if printPrompts:        
         print('Signal adapted to {} dB SRER'.format(round(max(SRER), 6)))
         print('Total Time: {}\n\n'.format(strftime("%H:%M:%S", gmtime(time() - startTime))))
     
-    return Determ, Stoch, Var, SRER, aSNR
+    return Determ, SRER, Kmax, Fmax
 
-def eaQHMsynthesis(Determ, Stoch, Var, printPrompts: bool = True, loadingScreen: bool = True):
+def eaQHMsynthesis(Determ, fs: int, Kmax: int, printPrompts: bool = True, loadingScreen: bool = True):
     '''
     Performs speech synthesis using the extended adaptive Quasi-Harmonic
     Model parameters from eaQHManalysis and resynthesizes speech from 
@@ -539,10 +458,10 @@ def eaQHMsynthesis(Determ, Stoch, Var, printPrompts: bool = True, loadingScreen:
     ----------
     Determ : (No_ti) array_like
         The Deterministic part of the signal. An array containing elements of Deterministic-class type.
-    Stoch : (No_ti) array_like
-        The Stochastic part of the signal. An array containing elements of Stochastic-class type. If fullWaveform == True, an empty array is returned.
-    Var : Various
-        Various important data.
+    fs : int
+        The sampling frequency.
+    Kmax : int
+        The number of partials used.
     printPrompts : bool, optional
         Determines if prompts of this process will be printed. The default is True.
     loadingScreen : bool, optional
@@ -556,9 +475,7 @@ def eaQHMsynthesis(Determ, Stoch, Var, printPrompts: bool = True, loadingScreen:
     startTime = time()
     min_interp_size = 4
     
-    Kmax = Var.Kmax
     len1 = Determ[len(Determ)-1].ti + 500
-    fs= Var.fs
     
     length = len1
     
@@ -581,11 +498,11 @@ def eaQHMsynthesis(Determ, Stoch, Var, printPrompts: bool = True, loadingScreen:
     
     step = ti[1] - ti[0]
     
-    a_0 = interp1d(ti, a0[ti], fill_value="extrapolate")(arange(0, len1))
-    qh = a_0
+    s = interp1d(ti, a0[ti], fill_value="extrapolate")(arange(0, len1))
+    #s = a_0
     
     if printPrompts:
-        print('Performing extended adaptive Quasi Harmonic Model synthesis in file: {}'.format(Var.filename))
+        print('Performing extended adaptive Quasi Harmonic Model synthesis')
 
     
     if loadingScreen:
@@ -625,41 +542,15 @@ def eaQHMsynthesis(Determ, Stoch, Var, printPrompts: bool = True, loadingScreen:
             pm_tmp[idx2, k]= phase_integr_interpolation(2*pi/fs*fm[:, k], pm[:, k], idx1)
             
             try:
-                qh[idx2] = qh[idx2] + 2*multiply(am_tmp[idx2, k], cos(pm_tmp[idx2, k])).sum(axis=1)
+                s[idx2] = s[idx2] + 2*multiply(am_tmp[idx2, k], cos(pm_tmp[idx2, k])).sum(axis=1)
             except IndexError:
-                qh[idx2] = qh[idx2] + 2*multiply(am_tmp[idx2, k], cos(pm_tmp[idx2, k]))
+                s[idx2] = s[idx2] + 2*multiply(am_tmp[idx2, k], cos(pm_tmp[idx2, k]))
         if loadingScreen:
             synthesisloop.update(1)
         
     if loadingScreen:
         synthesisloop.close()
         
-    noi = zeros(length, float)
-        
-    if not Var.fullBand:
-        #----NOT TESTED----
-        from numpy import hanning
-        from random import random
-        N = Stoch[1].ti - Stoch[0].ti
-        n = arange(-N-1, N)
-        win = hanning(2*N+1)
-        
-        for st, i in enumerate(Stoch):
-            if st.isSpeech and st.ti > N:
-                e = zeros(2*N+1, float)
-                
-                for i in range(len(e)):
-                    e[i] = 2*random()-1
-                
-                e = lfilter([1], st.ap, e)
-                
-                e_env = 2*abs(st.env_ak)*cos(2*pi*st.env_fk*n/fs + tile(st.env_pk, (1, 2*N+1)));
-                e = e/std(e)*transpose(e_env);
-
-                noi[st.ti + n] = noi[st.ti + n] + win*e;
-    
-    s = qh + noi
-    
     print('Signal synthesised')
     print('Total Time: {}\n\n'.format(strftime("%H:%M:%S", gmtime(time() - startTime))))
     
@@ -691,8 +582,6 @@ def iqhmLS_complexamps(s, fk, win, fs: int, iterates: int = 0):
         Slope of harmonics.
     df : array_like
         Frequency mismatch.
-    SNR : float
-        Signal-to-noise ratio.
 
     '''
     wint = transpose1dArray(win)
@@ -732,11 +621,7 @@ def iqhmLS_complexamps(s, fk, win, fs: int, iterates: int = 0):
         ak = x[0:K]
         bk = x[K:2*K+1]
     
-    y = real(dot(E, concatenate((ak, bk))))
-
-    SNR = 20*log10(std(s)/std(s-y))
-
-    return ak, bk, df, SNR
+    return ak, bk, df
     
 def aqhmLS_complexamps(s, fm, win, fs):
     '''
@@ -760,8 +645,6 @@ def aqhmLS_complexamps(s, fm, win, fs):
         Amplitude of harmonics.
     bk : array_like
         Slope of harmonics.
-    SNR : float
-        Signal-to-noise ratio.
 
     '''
     #----NOT TESTED----
@@ -800,11 +683,7 @@ def aqhmLS_complexamps(s, fm, win, fs):
     ak = x[0:K]
     bk = x[K:2*K+1]
     
-    y = real(dot(E, concatenate((ak, bk))))
-    
-    SNR = 20*log10(std(s)/std(s-y)) 
-
-    return ak, bk, SNR
+    return ak, bk
 
 def eaqhmLS_complexamps(s, am, fm, win, fs):
     '''
@@ -830,8 +709,6 @@ def eaqhmLS_complexamps(s, am, fm, win, fs):
         Amplitude of harmonics.
     bk : array_like
         Slope of harmonics.
-    SNR : float
-        Signal-to-noise ratio.
 
     '''
     wint = transpose1dArray(win)
@@ -871,11 +748,7 @@ def eaqhmLS_complexamps(s, am, fm, win, fs):
     ak = x[0:K]
     bk = x[K:2*K+1]
     
-    y = real(dot(E, concatenate((ak, bk))))
-    
-    SNR = 20*log10(std(s)/std(s-y))
-
-    return ak, bk, SNR
+    return ak, bk
 
 def phase_integr_interpolation(fm_hat, pm_hat, idx):
     '''
