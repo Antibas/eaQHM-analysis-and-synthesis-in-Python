@@ -5,7 +5,7 @@ Created on Sun Jan 31 17:16:16 2021
 @author: Panagiotis Antivasis
 """
 
-from functions import eaQHManalysis, eaQHMsynthesis
+from functions import eaQHMAnalysisAndSynthesis
 from numpy import arange, float32
 from scipy.io.wavfile import write
 from matplotlib.pyplot import subplots, show
@@ -29,13 +29,15 @@ def main():
     filename = input("Write the name of the file to be processed: ")
     gender = input("You may include a gender (male, female, child or other): ")
     
-    Determ, SRER, Kmax, Fmax = eaQHManalysis(filename, gender=gender, loadingScreen=False)
+    print()
+    
+    signal_reconstructed, SRER = eaQHMAnalysisAndSynthesis(filename, gender=gender, loadingScreen=False)
+    
     fs, signal = read(filename)
     signal = signal/normalize
     dt = 1/fs
     t = arange(0, len(signal)/fs, dt)
     
-    signal_reconstructed = eaQHMsynthesis(Determ, fs, Kmax, loadingScreen=False)
     t_reconstructed = arange(0, len(signal_reconstructed)/fs, dt)
     plot(t, t_reconstructed, signal, signal_reconstructed, filename)
     

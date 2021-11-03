@@ -35,14 +35,15 @@ from scipy.linalg import LinAlgError
 
 
 
-def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
+def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str = 'other', step: int = 15,
                   maxAdpt: int = 10, pitchPeriods: int = 3, analysisWindow: int = 32, fullWaveform: bool = True,
                   fullBand: bool = True, eaQHM: bool = True, fc: int = 0, partials: int = 0,
-                  printPrompts: bool = True, loadingScreen: bool = True):
+                  extraInfo: bool = False, printPrompts: bool = True, loadingScreen: bool = True):
     '''
     Performs adaptive Quasi-Harmonic Analysis of Speech
     using the extended adaptive Quasi-Harmonic Model and decomposes 
-    speech into AM-FM components according to that model.
+    speech into AM-FM components according to that model,
+    while iteratively refining it.
 
     Parameters
     ----------
@@ -69,6 +70,8 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
         Applies a high pass filtering at the specified Hz before the analysis starts. If <= 0, no filter is applied. The default is 0.
     partials : int, optional
         The number of partials to be used. If <= 0, it is determined by the pitch estimations. The default is 0.
+    extraInfo : bool, optional
+        Determines if 
     printPrompts : bool, optional
         Determines if prompts of this process will be printed. The default is True.
     loadingScreen : bool, optional
@@ -76,14 +79,17 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
 
     Returns
     -------
-    Determ : (No_ti) array_like
-        The Deterministic part of the signal. An array containing elements of Deterministic-class type.
+    s_recon : (length) array_like
+        The refined signal.
     SRER : (maxAdpt+1) array_like
         An array containing all the adaptation numbers of the signal.
-    Kmax : int
-        The number of partials used.
-    Fmax : int
-        The maximum frequency of the analysis.
+    DetComponents : (No_ti) array_like, optional
+        The Deterministic components of the signal. An array containing elements of Deterministic-class type. 
+        Only returned if extraInfo == True.
+    Kmax : int, optional
+        The number of partials used. Only returned if extraInfo == True.
+    Fmax : int, optional
+        The maximum frequency of the analysis. Only returned if extraInfo == True.
 
     '''
     startTime = time()
@@ -94,15 +100,7 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
     s = transpose1dArray(s/normalize)
     length = len(s)
     
-    if printPrompts:
-        if eaQHM:
-            print('\nPerforming extended adaptive Quasi Harmonic Model analysis in file: {}\n'.format(speechFile))
-        else:
-            print('\nPerforming adaptive Quasi Harmonic Model analysis in file: {}\n'.format(speechFile))
-    
     if fc > 0:
-        if printPrompts:
-            print('High pass filtering at', fc, 'Hz is applied.')
         s = transpose(ellipFilter(transpose(s), fs, fc))
         
     s2 = deepcopy(s)
@@ -123,8 +121,8 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
     try:
         f0s = swipep(transpose(s2)[0], fs, speechFile, [f0min, f0max], 0.001, -inf)
     except LinAlgError:
-        if printPrompts:
-            print("Initial SWIPEP failed. Using swipep2.\n")
+        #if printPrompts:
+        #    print("Initial SWIPEP failed. Using swipep2.\n")
         opt_swipep = {
             "dt": 0.001,
             "plim": [f0min, f0max],
@@ -133,7 +131,7 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
             "woverlap": 0.5,
             "sTHR": -inf
         }
-        f0s = swipep2(transpose(s2)[0], fs, speechFile, opt_swipep, printPrompts, loadingScreen)
+        f0s = swipep2(transpose(s2)[0], fs, speechFile, opt_swipep, loadingScreen)
     opt_pitch_f0min = f0min        
 
     f0sin = getLinear(f0s, arange(0, len(s2)-1, round(fs*5/1000))/fs)
@@ -178,7 +176,7 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
     ti = arange(1,length,step)
     No_ti = len(ti)
 
-    Determ = [Deterministic() for _ in range(No_ti)]
+    DetComponents = [Deterministic() for _ in range(No_ti)]
     SRER = zeros(maxAdpt+1, float)
     
     
@@ -356,11 +354,11 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
                                 fm_hat[tith-1][k] = fm_cur[tith-1][k] + df[k]
                             else:
                                 fm_hat[tith-1][k] = fm_cur[tith-1][k]
-                    Determ[i] = Deterministic(ti=tith-1, isSpeech=True, isVoiced=True)
+                    DetComponents[i] = Deterministic(ti=tith-1, isSpeech=True, isVoiced=True)
                 else:
-                   Determ[i] = Deterministic(ti=tith-1, isSpeech=True, isVoiced=False)
+                   DetComponents[i] = Deterministic(ti=tith-1, isSpeech=True, isVoiced=False)
             else:
-                Determ[i] = Deterministic(ti=tith-1, isSpeech=False, isVoiced=False)
+                DetComponents[i] = Deterministic(ti=tith-1, isSpeech=False, isVoiced=False)
             
             if loadingScreen:
                 analysisloop.update(1)
@@ -428,133 +426,30 @@ def eaQHManalysis(speechFile: str, gender: str = 'other', step: int = 15,
         if m != 0:
             if SRER[m] <= SRER[m-1]:
                 break
+        s_recon = deepcopy(s_hat)
+        
         a0_fin = a0_hat
         am_fin = am_hat
         fm_fin = fm_hat
         pm_fin = pm_hat
         
-    for i, d in enumerate(Determ):
+    for i, d in enumerate(DetComponents):
         if d.isVoiced:
             ti = d.ti
             idx = argwhere(am_fin[ti])
-            Determ[i].a0 = a0_fin[ti]
-            Determ[i].ak = arrayByIndex(idx, am_fin[ti, idx])
-            Determ[i].fk = arrayByIndex(idx, fm_fin[ti, idx])
-            Determ[i].pk = arrayByIndex(idx, pm_fin[ti, idx])
+            DetComponents[i].a0 = a0_fin[ti]
+            DetComponents[i].ak = arrayByIndex(idx, am_fin[ti, idx])
+            DetComponents[i].fk = arrayByIndex(idx, fm_fin[ti, idx])
+            DetComponents[i].pk = arrayByIndex(idx, pm_fin[ti, idx])
             
     if printPrompts:        
         print('Signal adapted to {} dB SRER'.format(round(max(SRER), 6)))
         print('Total Time: {}\n\n'.format(strftime("%H:%M:%S", gmtime(time() - startTime))))
     
-    return Determ, SRER, Kmax, Fmax
-
-def eaQHMsynthesis(Determ, fs: int, Kmax: int, printPrompts: bool = True, loadingScreen: bool = True):
-    '''
-    Performs speech synthesis using the extended adaptive Quasi-Harmonic
-    Model parameters from eaQHManalysis and resynthesizes speech from 
-    its AM-FM components according to the eaQHM model.
-
-    Parameters
-    ----------
-    Determ : (No_ti) array_like
-        The Deterministic part of the signal. An array containing elements of Deterministic-class type.
-    fs : int
-        The sampling frequency.
-    Kmax : int
-        The number of partials used.
-    printPrompts : bool, optional
-        Determines if prompts of this process will be printed. The default is True.
-    loadingScreen : bool, optional
-        Determines if a tqdm loading screen will be displayed in the console. The default is True.
-
-    Returns
-    -------
-    s : array_like
-        The reconstructed speech signal.
-    '''
-    startTime = time()
-    min_interp_size = 4
+    if extraInfo:
+        return s_recon, DetComponents, SRER, Kmax, Fmax
     
-    len1 = Determ[len(Determ)-1].ti + 500
-    
-    length = len1
-    
-    ti = zeros(len(Determ), int)
-    a0 = zeros(len1, float)
-    am = zeros((length, Kmax), float)
-    fm = zeros((length, Kmax), float)
-    pm = zeros((length, Kmax), float)
-    pm_tmp = zeros((length, Kmax), float)
-    am_tmp = zeros((length, Kmax), float)
-    
-    for i, d in enumerate(Determ):
-        ti[i] = d.ti
-        if d.isVoiced:
-            a0[d.ti] = d.a0
-            k = arange(0, len(d.ak))
-            am[d.ti, k] = transpose(d.ak)
-            fm[d.ti, k] = transpose(d.fk)
-            pm[d.ti, k] = transpose(d.pk)
-    
-    step = ti[1] - ti[0]
-    
-    s = interp1d(ti, a0[ti], fill_value="extrapolate")(arange(0, len1))
-    #s = a_0
-    
-    if printPrompts:
-        print('Performing extended adaptive Quasi Harmonic Model synthesis')
-
-    
-    if loadingScreen:
-        synthesisloop = tqdm(total=Kmax, position=0, leave=True)
-    
-    for k in range(Kmax): 
-        if loadingScreen:
-            synthesisloop.set_description("Synthesis".format(k))
-                
-        nzv = argwhere(am[:, k]) 
-        
-        dnzv = diff(concatenate(([0], transpose(nzv)[0], [len1])))
-        
-        dnzv_idx = (dnzv <= step).astype(int)
-        
-        dnzv_idx_diff = diff(dnzv_idx)
-        st_ti = argwhere(dnzv_idx_diff == 1)
-        en_ti = argwhere(dnzv_idx_diff == -1)
-        
-        for i, st_tith in enumerate(st_ti):
-            idx1 = transpose(nzv[st_tith[0]: en_ti[i][0]+1])[0]
-            idx2 = arange(nzv[st_tith[0]], nzv[en_ti[i][0]]+1)
-            
-            am_tmp[idx2, k] = interp1d(idx1, am[idx1, k])(idx2)
-            
-            z1 = fm[idx1, k] < 0
-            if z1.any():
-                fm[idx1[argwhere(z1)], k] = -fm[idx1[argwhere(z1)], k]
-            
-            if len(idx1) >= min_interp_size:
-                fm[idx2, k] = interp1d(idx1, fm[idx1, k], kind=3)(idx2)
-            else:
-                idx1_tmp = concatenate((arange(0, (min_interp_size-len(idx1))*step, step), idx1)) 
-                
-                fm[idx2, k] = interp1d(idx1_tmp, fm[idx1_tmp, k], kind=3)(idx2)
-            
-            pm_tmp[idx2, k]= phase_integr_interpolation(2*pi/fs*fm[:, k], pm[:, k], idx1)
-            
-            try:
-                s[idx2] = s[idx2] + 2*multiply(am_tmp[idx2, k], cos(pm_tmp[idx2, k])).sum(axis=1)
-            except IndexError:
-                s[idx2] = s[idx2] + 2*multiply(am_tmp[idx2, k], cos(pm_tmp[idx2, k]))
-        if loadingScreen:
-            synthesisloop.update(1)
-        
-    if loadingScreen:
-        synthesisloop.close()
-        
-    print('Signal synthesised')
-    print('Total Time: {}\n\n'.format(strftime("%H:%M:%S", gmtime(time() - startTime))))
-    
-    return s
+    return s_recon, DetComponents
 
 def iqhmLS_complexamps(s, fk, win, fs: int, iterates: int = 0):
     '''
@@ -857,7 +752,7 @@ def voicedUnvoicedFrames(s, fs: int, gender: str):
     
     return P,  P[1].ti-P[0].ti
     
-def swipep2(x, fs: int, speechFile: str, opt: dict, printPrompts: bool = True, loadingScreen: bool = True):
+def swipep2(x, fs: int, speechFile: str, opt: dict, loadingScreen: bool = True):
     '''
     Performs a pitch estimation of the signal for every time instant.
 
@@ -879,8 +774,6 @@ def swipep2(x, fs: int, speechFile: str, opt: dict, printPrompts: bool = True, l
         ---- woverlap: float - The overlap of the Hanning window
         ---- sTHR: int - The threshold of the pitch strength.
         
-    printPrompts : bool, optional
-        Determines if prompts of this process will be printed. The default is True.
     loadingScreen : bool, optional
         Determines if a tqdm loading screen will be displayed in the console. The default is True.
 
@@ -997,8 +890,6 @@ def swipep2(x, fs: int, speechFile: str, opt: dict, printPrompts: bool = True, l
     return concatenate((transpose1dArray(t), p, s), axis=1)
 
 def pitchStrengthAllCandidates(f, L, pc):
-    from copy import deepcopy
-    
     S = zeros((len(pc), len(L[1])))
     k = zeros(len(pc)+1, dtype=int)
     for j in range(len(k)-1):

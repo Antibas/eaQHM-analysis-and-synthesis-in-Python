@@ -8,7 +8,7 @@ from scipy.io import loadmat
 
 from numpy import asarray, ndarray, zeros, transpose, flip, power, complex128, \
 uint8, int8, int16, int32, int64, float16, float32, float64, arange, cos, pi, \
-fix, multiply, imag, tile, sqrt, concatenate, fliplr, flipud, ones, logical_and
+fix, multiply, imag, tile, sqrt, concatenate, fliplr, flipud, ones
 
 from statistics import median
 from scipy.signal import ellip, filtfilt
@@ -298,31 +298,6 @@ def mySpecgram(x,nfft,fs,window,noverlap):
     t = colindex/fs
     return y3, f, t
 
-def maxfilt(x, p):
-    '''
-    Performs maxian filtering of order p.
-    
-    ----INPUT PARAMETERS----
-    1) x: array - The signal 
-    2) p: int - The order of the filter
-    
-    ----OUTPUT PARAMETERS----
-    The filtered signal
-    '''
-    #----NOT TESTED----
-    xt = transpose(x)
-    L = len(xt)
-    
-    ad = (p-1)/2
-    if ad == 0:
-        return xt
-    from scipy.linalg import toeplitz
-    x = concatenate((x[0]*ones(ad), xt, x[L]*ones(ad)))
-    
-    A = fliplr(toeplitz(fliplr(x[1:L]), x[L:L+p-1]))
-    
-    return max(A)
-
 def medfilt(x, p):
     '''
     Performs median filtering of order p.
@@ -344,30 +319,7 @@ def medfilt(x, p):
     x = concatenate((x[0]*ones(int(ad)), x, x[L-1]*ones(int(ad))))
     
     A = fliplr(toeplitz(flipud(x[0:L]), x[L:L+p-1]))
-    '''Amed = []
-    for i in range(len(A)):
-        Amed.append(median(A[i]))
-    return Amed'''
-    return [median(a) for a in A]
-
-def peak_picking(x):
-    '''
-    Performs peak picking on a signal.
-
-    ----INPUT PARAMETERS----
-    x: array - The signal
-
-    ----OUTPUT PARAMENTERS----
-    1) x_max: the values of the peaks
-    2) x_pos: the location of the peaks (in samples) 
-    '''
-    #----NOT TESTED----
-    end = len(x)-1
-    lDiff = x[1:end-1]-x[0:end-2]
-    rDiff = x[2:end]-x[1:end-1]
     
-    x_pos = logical_and(lDiff > 0, rDiff < 0)
-    x_max = x[x_pos]
-    return x_max, x_pos
+    return [median(a) for a in A]
 
     

@@ -5,13 +5,10 @@
 ## Introduction
 The following repository is the source code corresponding to the thesis of **Panagiotis Antivasis**, an undergraduate [Computer Science](https://www.csd.uoc.gr/) student at the [University of Crete](https://www.uoc.gr/). 
 
-This code is built upon a speech analysis and synthesis system named [ROBUST FULL-BAND ADAPTIVE SINUSOIDAL ANALYSIS AND SYNTHESIS OF SPEECH, by George P. Kafentzis, Olivier Rosec, Yannis Stylianou](https://www.csd.uoc.gr/~kafentz/Publications/Kafentzis%20G.P.,%20Rosec%20O.,%20and%20Stylianou%20Y.%20Robut%20Adaptive%20Sinusoidal%20Analysis%20and%20Synthesis%20of%20Speech.pdf). The system in the so-called **Extended Adaptive Quasi-Harmonic Model (eaQHM)** and this source code implements it into **Python**. The code consists mainly of functions that perform speech analysis, synthesis and interpolation and those of utmost significance are **eaQHManalysis** and **eaQHMsynthesis**.
+This code is built upon a speech analysis and synthesis system named [ROBUST FULL-BAND ADAPTIVE SINUSOIDAL ANALYSIS AND SYNTHESIS OF SPEECH, by George P. Kafentzis, Olivier Rosec, Yannis Stylianou](https://www.csd.uoc.gr/~kafentz/Publications/Kafentzis%20G.P.,%20Rosec%20O.,%20and%20Stylianou%20Y.%20Robut%20Adaptive%20Sinusoidal%20Analysis%20and%20Synthesis%20of%20Speech.pdf). The system in the so-called **Extended Adaptive Quasi-Harmonic Model (eaQHM)** and this source code implements it into **Python**.
 
-## eaQHManalysis
-**eaQHManalysis** is a function that performs **extended adaptive Quasi-Harmonic Analysis** in a signal and decomposes speech into AM-FM components according to that model. In other words, it receives a *.wav* file and some other optional parameters and produces a [Deterministic](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.16.5702&rep=rep1&type=pdf) component of the signal by assuming an initially harmonic model by applying an ```f0``` estimation and then iteratively refining it, until the reconstructed signal converges in *quasi-harmonicity*.
-
-## eaQHMsynthesis
-**eaQHMsynthesis** does the exact opposite of **eaQHManalysis**, meaning it receives the output of the latter and performs **extended Adaptive Quasi-Harmonic Synthesis** in a signal. In other words, it extracts the decomposed signal from **eaQHManalysis** and resynthesizes it.
+## eaQHMAnalysisAndSynthesis
+**eaQHMAnalysisAndSynthesis** is a function that performs **extended adaptive Quasi-Harmonic Analysis and Synthesis** in a signal and decomposes speech into AM-FM components according to that model. In other words, it receives a *.wav* file and some other optional parameters and produces a [Deterministic component](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.16.5702&rep=rep1&type=pdf) of the signal by assuming an initially harmonic model by applying an ```f0``` estimation and then iteratively refining it, until the reconstructed signal converges in *quasi-harmonicity*. 
 
 ## Prerequisites & Requirements
 **Python 3.8.x** and up. It is also highly suggested to use [Spyder](https://www.spyder-ide.org/) environment as the whole code was tested in it. Before you run, make sure to install all requirements by executing:
@@ -20,12 +17,12 @@ pip install -r requirements.txt
 ```
 
 ## How to Run
-A *main.py* file is provided, which executes **eaQHManalysis** on a speech signal, whose name is given as an input on the console and **eaQHMsynthesis** to the output of the former. A wav file *SA19.wav* is provided for you to try it.
+A *main.py* file is provided, which executes **eaQHMAnalysisAndSynthesis** on a speech signal, whose name is given as an input on the console. The gender of the speaker may also be specified. A wav file *SA19.wav* is provided for you to try it.
 
 What you have to do is:
 1. Open *main.py*.
 2. Run the code.
-3. Give as input the name of the *.wav* file to be processed in the console.
+3. Give as input the name of the mono *.wav* file to be processed in the console.
 4. Specify the gender of the speaker ("male", "female" or other). You may also use "child" as an input.
 5. After the program terminates, a *\*filename\*_reconstructed.wav* file will be generated.
 
@@ -39,8 +36,8 @@ And here are the plots produced:
 ![](img/timeDom.png)
 
 ## Known Issues
-* This code takes a lot of time, even for small speech files.
-* The results may be different than expected due to the inaccuracy of [SWIPEP pitch estimator](http://www.kerwa.ucr.ac.cr:8080/bitstream/handle/10669/536/dissertation.pdf)
+* This code may take a lot of time, even for small speech files. Time may also vary based on the CPU Usage.
+* In some cases the SWIPEP pitch estimator may raise a ```LinAlgError```, in which case an alternative SWIPEP pitch estimator is used.
 * At the time of publication, certain sections of the code have not been tested. Those parts that are inaccessible based on the majority of the parameters given are marked with the phrase:
 ```Python
 #----NOT TESTED----
