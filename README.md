@@ -38,11 +38,7 @@ And here are the plots produced:
 ## Known Issues
 * This code may take a lot of time, even for small speech files. Time may also vary based on the CPU Usage.
 * In some cases the SWIPEP pitch estimator may raise a ```LinAlgError```, in which case an alternative SWIPEP pitch estimator is used.
-* At the time of publication, certain sections of the code have not been tested. Those parts that are inaccessible based on the majority of the parameters given are marked with the phrase:
-```Python
-#----NOT TESTED----
-```
-If changes are made in those parameters, that does not guarantee these sections will work properly.
+
 
 ## Code citation
 If you wish to use and cite this code, please use the following:

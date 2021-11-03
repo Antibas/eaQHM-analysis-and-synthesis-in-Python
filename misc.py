@@ -89,7 +89,7 @@ def end(a):
     The last element of array a.
     '''
     
-    if isinstance(a, ndarray):
+    if isinstance(a, ndarray) or isinstance(a, list):
         return end(a[len(a)-1])
     return a
    

@@ -146,10 +146,6 @@ numArr = []
 
 def primeArr(n):
     """Return a list containing only prime numbers."""
-    '''for num in range(1, n + 2):
-        if is_prime(num):
-            numArr.append(num)
-    return numArr'''
     return [i for i in range(1, n + 2) if is_prime(i)]
 
 

@@ -121,8 +121,8 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str = 'other', step: int 
     try:
         f0s = swipep(transpose(s2)[0], fs, speechFile, [f0min, f0max], 0.001, -inf)
     except LinAlgError:
-        #if printPrompts:
-        #    print("Initial SWIPEP failed. Using swipep2.\n")
+        if printPrompts:
+            print("---- Initial SWIPEP failed. Using swipep2 ----\n")
         opt_swipep = {
             "dt": 0.001,
             "plim": [f0min, f0max],
@@ -157,12 +157,12 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str = 'other', step: int 
         ss = zeros((len(s), 1))
         for p in P:
             if p.isSpeech and p.isVoiced:
-                sp_i = concatenate((sp_i, p.ti))
+                sp_i.append(p.ti)
             else:
                 if not isEmpty(sp_i):
                     sp_v = arange(sp_i[0]-p_step, end(sp_i)+p_step+1)
                     ss[sp_v] = s[sp_v]
-                    sp_i = []
+                    sp_i.clear()
         deterministic_part = ss 
     else:
         for i, p in enumerate(P):
@@ -542,7 +542,6 @@ def aqhmLS_complexamps(s, fm, win, fs):
         Slope of harmonics.
 
     '''
-    #----NOT TESTED----
     wint = transpose1dArray(win)
     
     length = len(fm)
