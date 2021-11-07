@@ -444,8 +444,8 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str = 'other', step: int 
     if extraInfo:
         return s_recon, DetComponents, SRER, Kmax, Fmax, endTime
     
-    return endTime
-    #return s_recon, DetComponents
+    #return endTime
+    return s_recon, DetComponents
 
 def iqhmLS_complexamps(s, f0range, window, fs: int, iterates: int = 0):
     '''
@@ -507,10 +507,10 @@ def iqhmLS_complexamps(s, f0range, window, fs: int, iterates: int = 0):
         
         windowSignal = multiply(windowT, s)
         arr = dot(EwindowT, windowSignal)
-        x = dot(inv(R), arr)
+        ampsl = dot(inv(R), arr)
             
-        amplitudes = x[0:K]
-        slopes = x[K:2*K+1]
+        amplitudes = ampsl[0:K]
+        slopes = ampsl[K:2*K+1]
     
     return amplitudes, slopes, fmismatch
     
@@ -568,10 +568,10 @@ def aqhmLS_complexamps(s, fm, window, fs):
     
     windowSignal = multiply(windowT, s)
     arr = dot(EwindowT, windowSignal)
-    x = dot(inv(R), arr)
+    ampsl = dot(inv(R), arr)
     
-    amplitudes = x[0:K]
-    slopes = x[K:2*K+1]
+    amplitudes = ampsl[0:K]
+    slopes = ampsl[K:2*K+1]
     
     return amplitudes, slopes
 
@@ -633,10 +633,10 @@ def eaqhmLS_complexamps(s, am, fm, window, fs):
     
     windowSignal = multiply(windowT, s)
     arr = dot(EwindowT, windowSignal)
-    x = dot(inv(R), arr)
+    ampsl = dot(inv(R), arr)
     
-    amplitudes = x[0:K]
-    slopes = x[K:2*K+1]
+    amplitudes = ampsl[0:K]
+    slopes = ampsl[K:2*K+1]
     
     return amplitudes, slopes
 
@@ -747,13 +747,13 @@ def voicedUnvoicedFrames(s, fs: int, gender: str):
     
     return frames,  frames[1].ti-frames[0].ti
     
-def swipep2(x, fs: int, speechFile: str, opt: dict, loadingScreen: bool = True):
+def swipep2(s, fs: int, speechFile: str, opt: dict, loadingScreen: bool = True):
     '''
     Performs a pitch estimation of the signal for every time instant.
 
     Parameters
     ----------
-    x : array_like
+    s : array_like
         The signal to be estimated.
     fs : int
         The sampling frequency.
@@ -782,7 +782,7 @@ def swipep2(x, fs: int, speechFile: str, opt: dict, loadingScreen: bool = True):
     from numpy import power, empty, polyfit, polyval, nan
     from misc import myHann, arrayMax, mySpecgram
     
-    t = arange(0, len(x)/fs+opt['dt'], opt['dt'])
+    t = arange(0, len(s)/fs+opt['dt'], opt['dt'])
     
     log2pc = arange(log2(opt['plim'][0]), log2(opt['plim'][1]), opt['dlog2p'])
                 
@@ -809,7 +809,7 @@ def swipep2(x, fs: int, speechFile: str, opt: dict, loadingScreen: bool = True):
         
         dn = int(max(1, round(8*(1-opt['woverlap'])*fs/pO[i])))
         
-        xzp = concatenate((zeros((int(ws[i]/2))), x, zeros((dn + int(ws[i]/2)))))
+        xzp = concatenate((zeros((int(ws[i]/2))), s, zeros((dn + int(ws[i]/2)))))
         
         w = myHann(ws[i])
         o = int(max(0, round(ws[i] - dn)))
@@ -857,17 +857,17 @@ def swipep2(x, fs: int, speechFile: str, opt: dict, loadingScreen: bool = True):
     if loadingScreen:
         wsloop.close()
        
-    p = empty((len(S[0]), 1), dtype=object)
-    s = empty((len(S[0]), 1), dtype=object)
+    f0est = empty((len(S[0]), 1), dtype=object)
+    strength = empty((len(S[0]), 1), dtype=object)
     for j in range(len(S[0])):
-        s[j] = max(S[:, j])
-        i = singlelize(argwhere(S[:, j] == s[j])[0])
+        strength[j] = max(S[:, j])
+        i = singlelize(argwhere(S[:, j] == strength[j])[0])
         
-        if s[j] < opt['sTHR']:
+        if strength[j] < opt['sTHR']:
             continue
         
         if i == 0 or i == len(pc)-1:
-            p[j] = pc[i]
+            f0est[j] = pc[i]
         else:
             I = arange(i-1, i+2)
             tc = 1 / pc[I]
@@ -878,11 +878,11 @@ def swipep2(x, fs: int, speechFile: str, opt: dict, loadingScreen: bool = True):
             ftc = 1/power(2, arange(log2(pc[I[0]]), log2(pc[I[2]])+ftc_step, ftc_step))
             nftc = (ftc/tc[1] - 1) * 2*pi
             arr = polyval(c, nftc)
-            s[j] = max(arr)
-            k = singlelize(argwhere(arr == s[j]))
-            p[j] = power(2, log2(pc[I[0]]) + k/12/100)
+            strength[j] = max(arr)
+            k = singlelize(argwhere(arr == strength[j]))
+            f0est[j] = power(2, log2(pc[I[0]]) + k/12/100)
     
-    return concatenate((transpose1dArray(t), p, s), axis=1)
+    return concatenate((transpose1dArray(t), f0est, strength), axis=1)
 
 def pitchStrengthAllCandidates(f, L, pc):
     S = zeros((len(pc), len(L[1])))
