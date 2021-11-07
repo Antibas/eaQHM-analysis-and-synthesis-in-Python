@@ -5,14 +5,14 @@ Created on Wed Jan 27 21:00:39 2021
 @author: Panagiotis Antivasis
 """
 class Deterministic:
-    def __init__(self, ti = [], isSpeech = False, isVoiced = False, a0 = [], ak = [], fk = [], \
+    def __init__(self, ti = [], isSpeech = False, isVoiced = False, a0 = [], amplitudes = [], frange = [], \
                  pk = []):
         self.ti = ti
         self.isSpeech = isSpeech
         self.isVoiced = isVoiced
         self.a0 = a0
-        self.ak = ak
-        self.fk = fk
+        self.ak = amplitudes
+        self.frange = frange
         self.pk = pk
 
     def __str__(self):

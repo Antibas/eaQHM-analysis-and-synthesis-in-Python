@@ -18,6 +18,7 @@ from math import log2
 from copy import deepcopy
 
 normalize = 32768
+min_interp_size = 4
 
 def matToObject(filename: str):
     '''

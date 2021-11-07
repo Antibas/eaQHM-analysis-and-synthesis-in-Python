@@ -21,7 +21,7 @@ from scipy.io.wavfile import read
 
 from misc import arrayByIndex, mytranspose, end, transpose1dArray, normalize, \
 isContainer, isEmpty, erbs2hz, hz2erbs, primes, apply, singlelize, ellipFilter, \
-medfilt
+medfilt, min_interp_size
 
 from copy import deepcopy
 
@@ -32,8 +32,6 @@ from warnings import filterwarnings
 from SWIPE import swipep
 
 from scipy.linalg import LinAlgError
-
-
 
 def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str = 'other', step: int = 15,
                   maxAdpt: int = 10, pitchPeriods: int = 3, analysisWindow: int = 32, fullWaveform: bool = True,
@@ -81,7 +79,7 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str = 'other', step: int 
     -------
     s_recon : (length) array_like
         The refined signal.
-    SRER : (maxAdpt+1) array_like
+    SRER : (a+1) array_like
         An array containing all the adaptation numbers of the signal.
     DetComponents : (No_ti) array_like, optional
         The Deterministic components of the signal. An array containing elements of Deterministic-class type. 
@@ -90,11 +88,11 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str = 'other', step: int 
         The number of partials used. Only returned if extraInfo == True.
     Fmax : int, optional
         The maximum frequency of the analysis. Only returned if extraInfo == True.
-
+    endTime : time, optional
+        The total time the process takes. Only returned if extraInfo == True.
     '''
-    startTime = time()
     filterwarnings("ignore")
-    min_interp_size = 4
+    startTime = time()
     
     fs, s = read(speechFile)
     s = transpose1dArray(s/normalize)
@@ -132,9 +130,8 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str = 'other', step: int 
             "sTHR": -inf
         }
         f0s = swipep2(transpose(s2)[0], fs, speechFile, opt_swipep, loadingScreen)
-    opt_pitch_f0min = f0min        
 
-    f0sin = getLinear(f0s, arange(0, len(s2)-1, round(fs*5/1000))/fs)
+    f0s = getLinear(f0s, arange(0, len(s2)-1, round(fs*5/1000))/fs)
        
     if fullBand:
         Fmax = int(fs/2-200)
@@ -142,62 +139,61 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str = 'other', step: int 
         if partials > 0:
             Kmax = partials
         else:
-            Kmax = int(round(Fmax/min(f0sin[:,1])) + 10)
+            Kmax = int(round(Fmax/min(f0s[:,1])) + 10)
     else:
         Fmax = int(fs/2-2000)
-        Kmax = int(round(Fmax/min(f0sin[:,1])) + 10) 
+        Kmax = int(round(Fmax/min(f0s[:,1])) + 10) 
     
     
     analysisWindowSamples = analysisWindow*step
     
-    P, p_step = voicedUnvoicedFrames(s, fs, gender)
+    frames, frame_step = voicedUnvoicedFrames(s, fs, gender)
 
     if not fullWaveform:
         sp_i = []
         ss = zeros((len(s), 1))
-        for p in P:
-            if p.isSpeech and p.isVoiced:
-                sp_i.append(p.ti)
+        for f in frames:
+            if f.isSpeech and f.isVoiced:
+                sp_i.append(f.ti)
             else:
                 if not isEmpty(sp_i):
-                    sp_v = arange(sp_i[0]-p_step, end(sp_i)+p_step+1)
+                    sp_v = arange(sp_i[0]-frame_step, end(sp_i)+frame_step+1)
                     ss[sp_v] = s[sp_v]
                     sp_i.clear()
         deterministic_part = ss 
     else:
-        for i, p in enumerate(P):
-            if p.ti > analysisWindowSamples/2 and p.isSpeech and (not p.isVoiced) and p.ti < length - analysisWindowSamples/2:
-                P[i].isVoiced = True
-            if p.ti > analysisWindowSamples/2 and (not p.isSpeech) and (not p.isVoiced) and p.ti < length - analysisWindowSamples/2:
-                P[i].isSpeech = True
-                P[i].isVoiced = True
+        for i, f in enumerate(frames):
+            if f.ti > analysisWindowSamples/2 and f.isSpeech and (not f.isVoiced) and f.ti < length - analysisWindowSamples/2:
+                frames[i].isVoiced = True
+            if f.ti > analysisWindowSamples/2 and (not f.isSpeech) and (not f.isVoiced) and f.ti < length - analysisWindowSamples/2:
+                frames[i].isSpeech = True
+                frames[i].isVoiced = True
         deterministic_part = s
 
     ti = arange(1,length,step)
     No_ti = len(ti)
 
     DetComponents = [Deterministic() for _ in range(No_ti)]
-    SRER = zeros(maxAdpt+1, float)
+    SRER = []#zeros(maxAdpt+1, float)
     
     
-    p = (ti/p_step)
-    pf = p.astype(int)
-    N = zeros(No_ti, int)
+    framei = (ti/frame_step)
+    framei_int = framei.astype(int)
+    window_lengths = zeros(No_ti, int)
 
-    f0_val = zeros(length, float)
-    fm_cur = zeros((length, Kmax), float)
-    am_cur = zeros((length, Kmax), float)
+    fm_current = zeros((length, Kmax), float)
+    am_current = zeros((length, Kmax), float)
     std_det = std(deterministic_part)
     
-    for m in range(maxAdpt+1):
+    for a in range(maxAdpt+1):
         adptStartTime = time()
         if printPrompts:
-            print('---- Adaptation No. {} ----\n'.format(m))
+            print('---- Adaptation No. {} ----\n'.format(a))
             
-        a0_hat = zeros(length, float)
-        am_hat = zeros((length, Kmax), float)
-        fm_hat = zeros((length, Kmax), float)
-        pm_hat = zeros((length, Kmax), float)
+        a0_recon = zeros(length, float)
+        am_recon = zeros((length, Kmax), float)
+        fm_recon = zeros((length, Kmax), float)
+        ph_recon = zeros((length, Kmax), float)
         
         if loadingScreen:
             analysisloop = tqdm(total=No_ti, position=0, leave=True)
@@ -207,153 +203,151 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str = 'other', step: int 
                 analysisloop.set_description("Analysis".format(i))
             
             if tith > analysisWindowSamples and tith < length-analysisWindowSamples:
-                if P[pf[i]-1].isVoiced and P[pf[i]].isVoiced: 
-                    if m == 0:
-                        lamda = p[i] - pf[i]
+                if frames[framei_int[i]-1].isVoiced and frames[framei_int[i]].isVoiced: 
+                    if a == 0:
+                        framei_dec = framei[i] - framei_int[i]
                         
-                        f0 = (1-lamda)*f0sin[pf[i]-1][1] + lamda*f0sin[pf[i]][1]
+                        f0 = (1-framei_dec)*f0s[framei_int[i]-1][1] + framei_dec*f0s[framei_int[i]][1]
                         
                         K = int(min(Kmax, int(Fmax/f0)))
                         
-                        fk = arange(-K,K+1)*f0
+                        f0range = arange(-K,K+1)*f0
                         
-                        N[i] = max(120, round((pitchPeriods/2)*(fs/f0))) 
+                        window_lengths[i] = max(120, round((pitchPeriods/2)*(fs/f0))) 
                         
-                        n = arange(-N[i]-1,N[i]) 
-                        win = blackman(2*N[i]+1)
+                        window_range = arange(-window_lengths[i]-1,window_lengths[i]) 
+                        window = blackman(2*window_lengths[i]+1)
                         
-                        ak, bk, df = iqhmLS_complexamps(s[n + tith], fk, win, fs)
-                        
-                        f0_val[tith-1] = f0
+                        amplitudes, slopes, fmismatch = iqhmLS_complexamps(s[window_range + tith], f0range, window, fs)
                     else:
-                        n = arange(-N[i]-1,N[i])
-                        win = hamming(2*N[i]+1)
+                        window_range = arange(-window_lengths[i]-1,window_lengths[i])
+                        window = hamming(2*window_lengths[i]+1)
                             
-                        idx = argwhere(fm_cur[tith-1])
+                        fm_current_nonzeros = argwhere(fm_current[tith-1])
                         
-                        if len(idx) == 0:
-                            idx = 0
-                            
-                            fm_cur[tith-1, idx] = 140
-                            am_cur[tith-1, idx] = 10e-4
-                            
-                            fm_tmp = fm_cur[tith + n, idx]
-                            am_tmp = am_cur[tith + n, idx]
-                            Kend = 1
+                        if len(fm_current_nonzeros) == 0:
+                            fm_current_nonzeros = 0
                             
                             K = 1
-                            L = len(fm_tmp)
-                                
-                            zr = argwhere(fm_tmp == 0)
-                            nzr = argwhere(fm_tmp)
                             
-                            if len(zr) != 0:
-                                zridx = zr[0][0]
-                                nzridx = nzr[0][0]
-                                if zridx == 0:
-                                    fm_tmp[zridx]= fm_tmp[nzridx]
-                                    am_tmp[zridx] = am_tmp[nzridx]
-                                   
-                                    nzr = insert(nzr, 0, zridx)
-                                
-                                zridx = end(zr)
-                                nzridx = end(nzr)
-                                if zridx == L-1:
-                                    fm_tmp[zridx] = fm_tmp[nzridx]
-                                    am_tmp[zridx] = am_tmp[nzridx]
-                                   
-                                    nzr = append(nzr, zridx)
+                            fm_current[tith-1, fm_current_nonzeros] = 140
+                            am_current[tith-1, fm_current_nonzeros] = 10e-4
                             
-                            x_new = arange(0, L)
-                            if len(transpose(nzr)) == 1:
-                                nzr = transpose(nzr)[0]
+                            fm = fm_current[tith + window_range, fm_current_nonzeros]
+                            am = am_current[tith + window_range, fm_current_nonzeros]
+                            
+                            fm_len = len(fm)
                                 
-                            fm_tmp = interp1d(nzr, fm_tmp[nzr])(x_new)
-                            am_tmp = interp1d(nzr, am_tmp[nzr])(x_new)
+                            fm_zeros = argwhere(fm == 0)
+                            fm_nonzeros = argwhere(fm)
+                            
+                            if len(fm_zeros) != 0:
+                                fm_zeros_index = fm_zeros[0][0]
+                                fm_nonzeros_index = fm_nonzeros[0][0]
+                                if fm_zeros_index == 0:
+                                    fm[fm_zeros_index]= fm[fm_nonzeros_index]
+                                    am[fm_zeros_index] = am[fm_nonzeros_index]
+                                   
+                                    fm_nonzeros = insert(fm_nonzeros, 0, fm_zeros_index)
+                                
+                                fm_zeros_index = end(fm_zeros)
+                                fm_nonzeros_index = end(fm_nonzeros)
+                                if fm_zeros_index == fm_len-1:
+                                    fm[fm_zeros_index] = fm[fm_nonzeros_index]
+                                    am[fm_zeros_index] = am[fm_nonzeros_index]
+                                   
+                                    fm_nonzeros = append(fm_nonzeros, fm_zeros_index)
+                            
+                            x_new = arange(0, fm_len)
+                            if len(transpose(fm_nonzeros)) == 1:
+                                fm_nonzeros = transpose(fm_nonzeros)[0]
+                                
+                            fm = interp1d(fm_nonzeros, fm[fm_nonzeros])(x_new)
+                            am = interp1d(fm_nonzeros, am[fm_nonzeros])(x_new)
                         else:
-                            fm_tmp = transpose(fm_cur[tith + n, idx])
-                            am_tmp = transpose(am_cur[tith + n, idx])
-                            Kend = len(idx)
+                            fm = transpose(fm_current[tith + window_range, fm_current_nonzeros])
+                            am = transpose(am_current[tith + window_range, fm_current_nonzeros])
+                            Kend = len(fm_current_nonzeros)
                         
-                            K = end(idx)+1
+                            K = end(fm_current_nonzeros)+1
                         
                             for k in range(Kend):
-                                L = len(fm_tmp[:, k])
+                                fm_len = len(fm[:, k])
                                 
-                                zr = argwhere(fm_tmp[:, k] == 0)
-                                nzr = argwhere(fm_tmp[:, k])
+                                fm_zeros = argwhere(fm[:, k] == 0)
+                                fm_nonzeros = argwhere(fm[:, k])
                                 
-                                if len(zr) != 0:
-                                    zridx = zr[0][0]
-                                    nzridx = nzr[0][0]
-                                    if zridx == 0:
-                                        fm_tmp[zridx][k]= fm_tmp[nzridx][k]
-                                        am_tmp[zridx][k] = am_tmp[nzridx][k]
+                                if len(fm_zeros) != 0:
+                                    fm_zeros_index = fm_zeros[0][0]
+                                    fm_nonzeros_index = fm_nonzeros[0][0]
+                                    if fm_zeros_index == 0:
+                                        fm[fm_zeros_index][k]= fm[fm_nonzeros_index][k]
+                                        am[fm_zeros_index][k] = am[fm_nonzeros_index][k]
                                        
-                                        nzr = insert(nzr, 0, zridx)
+                                        fm_nonzeros = insert(fm_nonzeros, 0, fm_zeros_index)
                                     
-                                    zridx = end(zr)
-                                    nzridx = end(nzr)
-                                    if zridx == L-1:
-                                        fm_tmp[zridx][k] = fm_tmp[nzridx][k]
-                                        am_tmp[zridx][k] = am_tmp[nzridx][k]
+                                    fm_zeros_index = end(fm_zeros)
+                                    fm_nonzeros_index = end(fm_nonzeros)
+                                    if fm_zeros_index == fm_len-1:
+                                        fm[fm_zeros_index][k] = fm[fm_nonzeros_index][k]
+                                        am[fm_zeros_index][k] = am[fm_nonzeros_index][k]
                                        
-                                        nzr = append(nzr, zridx)
+                                        fm_nonzeros = append(fm_nonzeros, fm_zeros_index)
                                 
-                                x_new = arange(0, L)
-                                if len(transpose(nzr)) == 1:
-                                    nzr = transpose(nzr)[0]
+                                x_new = arange(0, fm_len)
+                                if len(transpose(fm_nonzeros)) == 1:
+                                    fm_nonzeros = transpose(fm_nonzeros)[0]
                                     
-                                fm_tmp[:, k] = interp1d(nzr, fm_tmp[nzr, k])(x_new)
-                                am_tmp[:, k] = interp1d(nzr, am_tmp[nzr, k])(x_new)
+                                fm[:, k] = interp1d(fm_nonzeros, fm[fm_nonzeros, k])(x_new)
+                                am[:, k] = interp1d(fm_nonzeros, am[fm_nonzeros, k])(x_new)
                         
-                        if isinstance(idx, ndarray):
-                            idx = concatenate((transpose(-flipud(idx+1))[0], [0], transpose(idx)[0]+1)) + K
-                            tmp_zeros = zeros((L, 1), float)
+                        if isinstance(fm_current_nonzeros, ndarray):
+                            fm_current_nonzeros = concatenate((transpose(-flipud(fm_current_nonzeros+1))[0], [0], transpose(fm_current_nonzeros)[0]+1)) + K
+                            tmp_zeros = zeros((fm_len, 1), float)
                         
-                            fm_tmp = concatenate((-flipud(fm_tmp), tmp_zeros, fm_tmp), axis=1)
-                            am_tmp = concatenate((flipud(am_tmp), tmp_zeros, am_tmp), axis=1)
+                            fm = concatenate((-flipud(fm), tmp_zeros, fm), axis=1)
+                            am = concatenate((flipud(am), tmp_zeros, am), axis=1)
                         else:
-                            idx = asarray([K-1, K, K+1])
+                            fm_current_nonzeros = asarray([K-1, K, K+1])
                         
-                            tmp_zeros = zeros((L, 1), float)
+                            tmp_zeros = zeros((fm_len, 1), float)
                         
-                            fm_tmp = concatenate((-flipud(transpose1dArray(fm_tmp)), tmp_zeros, transpose1dArray(fm_tmp)), axis=1)
-                            am_tmp = concatenate((flipud(transpose1dArray(am_tmp)), tmp_zeros, transpose1dArray(am_tmp)), axis=1)
+                            fm = concatenate((-flipud(transpose1dArray(fm)), tmp_zeros, transpose1dArray(fm)), axis=1)
+                            am = concatenate((flipud(transpose1dArray(am)), tmp_zeros, transpose1dArray(am)), axis=1)
                         
                         if not eaQHM:
-                            ak_tmp, bk_tmp = aqhmLS_complexamps(s[n + tith], fm_tmp, win, fs)
+                            amplitudes_tmp, slopes_tmp = aqhmLS_complexamps(s[window_range + tith], fm, window, fs)
                         else:
-                            ak_tmp, bk_tmp = eaqhmLS_complexamps(s[n + tith], am_tmp, fm_tmp, win, fs)
+                            amplitudes_tmp, slopes_tmp = eaqhmLS_complexamps(s[window_range + tith], am, fm, window, fs)
                         
-                        df_tmp = fs/(2*pi)*divide(multiply(real(ak_tmp), imag(bk_tmp)) - multiply(imag(ak_tmp), real(bk_tmp)), abs(ak_tmp)**2)
+                        fmismatch_tmp = fs/(2*pi)*divide(multiply(real(amplitudes_tmp), imag(slopes_tmp)) - multiply(imag(amplitudes_tmp), real(slopes_tmp)), abs(amplitudes_tmp)**2)
                         
-                        ak = arrayByIndex(idx, transpose(ak_tmp)[0])
-                        bk = arrayByIndex(idx, transpose(bk_tmp)[0])
-                        df = arrayByIndex(idx, transpose(df_tmp)[0])
+                        amplitudes = arrayByIndex(fm_current_nonzeros, transpose(amplitudes_tmp)[0])
+                        slopes = arrayByIndex(fm_current_nonzeros, transpose(slopes_tmp)[0])
+                        fmismatch = arrayByIndex(fm_current_nonzeros, transpose(fmismatch_tmp)[0])
                         
-                    a0_hat[tith-1] = real(ak[K])
+                    a0_recon[tith-1] = real(amplitudes[K])
                     
-                    ak = mytranspose(ak[K+1:2*K+1])
-                    bk = mytranspose(bk[K+1:2*K+1])
-                    df = mytranspose(df[K+1:2*K+1])
+                    amplitudes = mytranspose(amplitudes[K+1:2*K+1])
+                    slopes = mytranspose(slopes[K+1:2*K+1])
+                    fmismatch = mytranspose(fmismatch[K+1:2*K+1])
                     
-                    ak_log_max = 20*log10(max(abs(ak)))-150
-                    h = f0/(m+1)
+                    amplitude_log_max = 20*log10(max(abs(amplitudes)))-150
+                    h = f0/(a+1)
                     
                     for k in range(K):
-                        ak_log = 20*log10(abs(ak[k]))
+                        amplitude_log = 20*log10(abs(amplitudes[k]))
                         
-                        if ak_log > ak_log_max and abs(df[k]) < h:
-                            am_hat[tith-1][k] = abs(ak[k])
-                            pm_hat[tith-1][k] = angle(ak[k])
+                        if amplitude_log > amplitude_log_max and abs(fmismatch[k]) < h:
+                            am_recon[tith-1][k] = abs(amplitudes[k])
+                            ph_recon[tith-1][k] = angle(amplitudes[k])
                                 
-                            if m == 0:
-                                fm_hat[tith-1][k] = (k+1)*f0 + df[k]
-                            elif f0 > opt_pitch_f0min:
-                                fm_hat[tith-1][k] = fm_cur[tith-1][k] + df[k]
+                            if a == 0:
+                                fm_recon[tith-1][k] = (k+1)*f0 + fmismatch[k]
+                            elif f0 > f0min:
+                                fm_recon[tith-1][k] = fm_current[tith-1][k] + fmismatch[k]
                             else:
-                                fm_hat[tith-1][k] = fm_cur[tith-1][k]
+                                fm_recon[tith-1][k] = fm_current[tith-1][k]
                     DetComponents[i] = Deterministic(ti=tith-1, isSpeech=True, isVoiced=True)
                 else:
                    DetComponents[i] = Deterministic(ti=tith-1, isSpeech=True, isVoiced=False)
@@ -366,10 +360,10 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str = 'other', step: int 
         if loadingScreen:
             analysisloop.close()
         
-        fm_cur = zeros((length, Kmax), float)
-        am_cur = zeros((length, Kmax), float)
+        fm_current = zeros((length, Kmax), float)
+        am_current = zeros((length, Kmax), float)
         
-        a0_hat = interp1d(ti-1, a0_hat[ti-1], kind=3, fill_value="extrapolate")(arange(0, length))
+        a0_recon = interp1d(ti-1, a0_recon[ti-1], kind=3, fill_value="extrapolate")(arange(0, length))
 
         
         if loadingScreen:
@@ -379,32 +373,32 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str = 'other', step: int 
             if loadingScreen:
                 interploop.set_description("Interpolation".format(k))
             
-            nzv = argwhere(am_hat[:, k]) 
+            am_recon_nonzeros = argwhere(am_recon[:, k]) 
             
-            dnzv = diff(concatenate(([0], transpose(nzv)[0], [length-1])))
+            diff_am_recon_nonzeros = diff(concatenate(([0], transpose(am_recon_nonzeros)[0], [length-1])))
             
-            dnzv_idx = (dnzv <= step).astype(int)
+            diff_indices = (diff_am_recon_nonzeros <= step).astype(int)
             
-            dnzv_idx_diff = diff(dnzv_idx)
-            st_ti = argwhere(dnzv_idx_diff == 1)
-            en_ti = argwhere(dnzv_idx_diff == -1)
+            diff_indices_diff = diff(diff_indices)
+            diff_ones = argwhere(diff_indices_diff == 1)
+            diff_minus_ones = argwhere(diff_indices_diff == -1)
             
-            for i, st_tith in enumerate(st_ti):
-                idx1 = transpose(nzv[st_tith[0]: en_ti[i][0]+1])[0]
-                idx2 = arange(nzv[st_tith[0]], nzv[en_ti[i][0]]+1)
+            for i, st_tith in enumerate(diff_ones):
+                am_indices = transpose(am_recon_nonzeros[st_tith[0]: diff_minus_ones[i][0]+1])[0]
+                am_range = arange(am_recon_nonzeros[st_tith[0]], am_recon_nonzeros[diff_minus_ones[i][0]]+1)
                 
-                am_hat[idx2, k] = interp1d(idx1, am_hat[idx1, k])(idx2)
+                am_recon[am_range, k] = interp1d(am_indices, am_recon[am_indices, k])(am_range)
                 
-                if len(idx1) >= min_interp_size:
-                    fm_hat[idx2, k] = interp1d(idx1, fm_hat[idx1, k], kind=3)(idx2)
+                if len(am_indices) >= min_interp_size:
+                    fm_recon[am_range, k] = interp1d(am_indices, fm_recon[am_indices, k], kind=3)(am_range)
                 else:
-                    idx1_tmp = concatenate((arange(0, (min_interp_size-len(idx1))*step, step), idx1)) 
+                    am_indices_tmp = concatenate((arange(0, (min_interp_size-len(am_indices))*step, step), am_indices)) 
                     
-                    fm_hat[idx2, k] = interp1d(idx1_tmp, fm_hat[idx1_tmp, k], kind=3)(idx2)
+                    fm_recon[am_range, k] = interp1d(am_indices_tmp, fm_recon[am_indices_tmp, k], kind=3)(am_range)
                 
-                pm_hat[idx2, k]= phase_integr_interpolation(2*pi/fs*fm_hat[:, k], pm_hat[:, k], idx1)
+                ph_recon[am_range, k]= phase_integr_interpolation(2*pi/fs*fm_recon[:, k], ph_recon[:, k], am_indices)
                 
-                fm_cur[idx2, k] = concatenate(([fm_hat[idx2[0]][k]], fs/(2*pi)*diff(unwrap(pm_hat[idx2, k]))))
+                fm_current[am_range, k] = concatenate(([fm_recon[am_range[0]][k]], fs/(2*pi)*diff(unwrap(ph_recon[am_range, k]))))
                 
             if loadingScreen:
                 interploop.update(1)
@@ -412,46 +406,48 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str = 'other', step: int 
         if loadingScreen:
             interploop.close()
         
-        am_cur = am_hat
+        am_current = am_recon
         
-        s_hat = a0_hat + 2*multiply(am_hat, cos(pm_hat)).sum(axis=1)
-        s_hatT = transpose1dArray(s_hat)
+        s_recon_tmp = a0_recon + 2*multiply(am_recon, cos(ph_recon)).sum(axis=1)
+        s_recon_tmpT = transpose1dArray(s_recon_tmp)
         
-        SRER[m] = 20*log10(std_det/std(deterministic_part-s_hatT))
+        SRER.append(20*log10(std_det/std(deterministic_part-s_recon_tmpT)))
         
         if printPrompts:
-            print('\nSRER: {} dB in Adaptation No: {}'.format(SRER[m], m))
+            print('\nSRER: {} dB in Adaptation No: {}'.format(SRER[a], a))
             print('Adaptation Time: {}\n'.format(strftime("%H:%M:%S", gmtime(time() - adptStartTime))))
         
-        if m != 0:
-            if SRER[m] <= SRER[m-1]:
+        if a != 0:
+            if SRER[a] <= SRER[a-1]:
                 break
-        s_recon = deepcopy(s_hat)
+        s_recon = deepcopy(s_recon_tmp)
         
-        a0_fin = a0_hat
-        am_fin = am_hat
-        fm_fin = fm_hat
-        pm_fin = pm_hat
+        a0_fin = a0_recon
+        am_fin = am_recon
+        fm_fin = fm_recon
+        pm_fin = ph_recon
         
     for i, d in enumerate(DetComponents):
         if d.isVoiced:
             ti = d.ti
-            idx = argwhere(am_fin[ti])
+            am_nonzeros = argwhere(am_fin[ti])
             DetComponents[i].a0 = a0_fin[ti]
-            DetComponents[i].ak = arrayByIndex(idx, am_fin[ti, idx])
-            DetComponents[i].fk = arrayByIndex(idx, fm_fin[ti, idx])
-            DetComponents[i].pk = arrayByIndex(idx, pm_fin[ti, idx])
+            DetComponents[i].amplitudes = arrayByIndex(am_nonzeros, am_fin[ti, am_nonzeros])
+            DetComponents[i].frange = arrayByIndex(am_nonzeros, fm_fin[ti, am_nonzeros])
+            DetComponents[i].pk = arrayByIndex(am_nonzeros, pm_fin[ti, am_nonzeros])
             
+    endTime = time() - startTime
     if printPrompts:        
         print('Signal adapted to {} dB SRER'.format(round(max(SRER), 6)))
-        print('Total Time: {}\n\n'.format(strftime("%H:%M:%S", gmtime(time() - startTime))))
+        print('Total Time: {}\n\n'.format(strftime("%H:%M:%S", gmtime(endTime))))
     
     if extraInfo:
-        return s_recon, DetComponents, SRER, Kmax, Fmax
+        return s_recon, DetComponents, SRER, Kmax, Fmax, endTime
     
-    return s_recon, DetComponents
+    return endTime
+    #return s_recon, DetComponents
 
-def iqhmLS_complexamps(s, fk, win, fs: int, iterates: int = 0):
+def iqhmLS_complexamps(s, f0range, window, fs: int, iterates: int = 0):
     '''
     Computes iteratively the parameters of first order complex polynomial
     model using Least Squares. 
@@ -460,9 +456,9 @@ def iqhmLS_complexamps(s, fk, win, fs: int, iterates: int = 0):
     ----------
     s : array_like
         The part of the signal to be computed.
-    fk : array_like
+    f0range : array_like
         The estimated frequencies.
-    win : array_like
+    window : array_like
         The window of the signal to be computed.
     fs : int
         The sampling frequency.
@@ -471,54 +467,54 @@ def iqhmLS_complexamps(s, fk, win, fs: int, iterates: int = 0):
 
     Returns
     -------
-    ak : array_like
+    amplitudes : array_like
         Amplitude of harmonics.
-    bk : array_like
+    slopes : array_like
         Slope of harmonics.
-    df : array_like
+    fmismatch : array_like
         Frequency mismatch.
 
     '''
-    wint = transpose1dArray(win)
+    windowT = transpose1dArray(window)
     
-    N = (len(s)-1)/2
+    midlen = (len(s)-1)/2
     
-    K = len(fk)
+    K = len(f0range)
     
-    n = arange(-N,N+1)
-    nt = transpose1dArray(n)
+    window_range = arange(-midlen,midlen+1)
+    window_rangeT = transpose1dArray(window_range)
     
-    ak = zeros(K, float)
-    bk = zeros(K, float)
-    df = zeros(K, float)
+    amplitudes = zeros(K, float)
+    slopes = zeros(K, float)
+    fmismatch = zeros(K, float)
     for i in range(iterates+1):
         if i != 0:
-            df += fs/(2*pi)*((imag(bk)*real(ak) - imag(ak)*real(bk))/abs(ak)**2)
+            fmismatch += fs/(2*pi)*((imag(slopes)*real(amplitudes) - imag(amplitudes)*real(slopes))/abs(amplitudes)**2)
             
-            cfk = diff([-fs/2, fk, fs/2])/2
-            idx = argwhere(df < -cfk[0:K] or df > cfk[1:len(cfk)])
-            df = arrayByIndex(idx, 0)
+            diff_f0range = diff([-fs/2, f0range, fs/2])/2
+            indices = argwhere(fmismatch < -diff_f0range[0:K] or fmismatch > diff_f0range[1:len(diff_f0range)])
+            fmismatch = arrayByIndex(indices, 0)
         
-        t = (nt*2*pi*fk)/fs 
+        t = (window_rangeT*2*pi*f0range)/fs 
         E = cos(t) + 1j* sin(t)
-        E = concatenate((E, tile(nt, (1, K))*E), axis=1)
+        E = concatenate((E, tile(window_rangeT, (1, K))*E), axis=1)
         
-        Ew = multiply(tile(wint, (1, 2*K)), E)
-        Ewt = conjugate(transpose(Ew))
-        R = dot(Ewt, Ew) 
+        Ewindow = multiply(tile(windowT, (1, 2*K)), E)
+        EwindowT = conjugate(transpose(Ewindow))
+        R = dot(EwindowT, Ewindow) 
 
         #assert(cond(R) < 10**(10)),'CAUTION!!! Bad condition of matrix.'
         
-        wins = multiply(wint, s)
-        arr = dot(Ewt, wins)
+        windowSignal = multiply(windowT, s)
+        arr = dot(EwindowT, windowSignal)
         x = dot(inv(R), arr)
             
-        ak = x[0:K]
-        bk = x[K:2*K+1]
+        amplitudes = x[0:K]
+        slopes = x[K:2*K+1]
     
-    return ak, bk, df
+    return amplitudes, slopes, fmismatch
     
-def aqhmLS_complexamps(s, fm, win, fs):
+def aqhmLS_complexamps(s, fm, window, fs):
     '''
     Computes the parameters of first order complex polynomial
     model using Least Squares and a FM model for the frequency. 
@@ -529,57 +525,57 @@ def aqhmLS_complexamps(s, fm, win, fs):
         The part of the signal to be computed.
     fm : array_like
         The estimated instantaneous frequencies.
-    win : array_like
+    window : array_like
         The window of the signal to be computed.
     fs : int
         The sampling frequency.
 
     Returns
     -------
-    ak : array_like
+    amplitudes : array_like
         Amplitude of harmonics.
-    bk : array_like
+    slopes : array_like
         Slope of harmonics.
 
     '''
-    wint = transpose1dArray(win)
+    windowT = transpose1dArray(window)
     
     length = len(fm)
     K = len(fm[0])
     
-    N = int((length-1)/2)
+    midlen = int((length-1)/2)
     
-    n = arange(-N,N+1)
-    nt = transpose1dArray(n)
+    window_range = arange(-midlen,midlen+1)
+    window_rangeT = transpose1dArray(window_range)
     
     f_an = zeros((K, length), float)
     for k in range(K):
         f_an[k] = lfilter([1], [1, -1], fm[:, k])
-        f_an[k] -= f_an[k][N]
+        f_an[k] -= f_an[k][midlen]
     
     t = (2*pi*f_an)/fs
     tT = transpose(t)
     
     E1 = cos(tT) + 1j* sin(tT)
-    E = concatenate((E1, tile(nt, (1, K))*E1), axis=1)
+    E = concatenate((E1, tile(window_rangeT, (1, K))*E1), axis=1)
     
-    Ew = multiply(E, tile(wint, (1, 2*K))) 
-    Ewt = conjugate(transpose(Ew))
+    Ewindow = multiply(E, tile(windowT, (1, 2*K))) 
+    EwindowT = conjugate(transpose(Ewindow))
     
-    R = dot(Ewt, Ew)
+    R = dot(EwindowT, Ewindow)
     
     #assert(cond(R) < 10**(10)),'CAUTION!!! Bad condition of matrix.'
     
-    wins = multiply(wint, s)
-    arr = dot(Ewt, wins)
+    windowSignal = multiply(windowT, s)
+    arr = dot(EwindowT, windowSignal)
     x = dot(inv(R), arr)
     
-    ak = x[0:K]
-    bk = x[K:2*K+1]
+    amplitudes = x[0:K]
+    slopes = x[K:2*K+1]
     
-    return ak, bk
+    return amplitudes, slopes
 
-def eaqhmLS_complexamps(s, am, fm, win, fs):
+def eaqhmLS_complexamps(s, am, fm, window, fs):
     '''
     Computes the parameters of first order complex polynomial
     model using Least Squares, a AM and a FM model for the frequency 
@@ -592,69 +588,69 @@ def eaqhmLS_complexamps(s, am, fm, win, fs):
         The estimated instantaneous amplitudes.
     fm : array_like
         The estimated instantaneous frequencies.
-    win : array_like
+    window : array_like
         The window of the signal to be computed.
     fs : int
         The sampling frequency.
 
     Returns
     -------
-    ak : array_like
+    amplitudes : array_like
         Amplitude of harmonics.
-    bk : array_like
+    slopes : array_like
         Slope of harmonics.
 
     '''
-    wint = transpose1dArray(win)
+    windowT = transpose1dArray(window)
     
     length = len(fm)
     K = len(fm[0])
     
-    N = int((length-1)/2)
+    midlen = int((length-1)/2)
     
-    n = arange(-N,N+1)
-    nt = transpose1dArray(n)
+    window_range = arange(-midlen,midlen+1)
+    window_rangeT = transpose1dArray(window_range)
     
     f_an = zeros((K, length), float)
     for k in range(K):
         f_an[k] = lfilter([1], [1, -1], fm[:, k])
-        f_an[k] -= f_an[k][N]
+        f_an[k] -= f_an[k][midlen]
     
     t = (2*pi*f_an)/fs
     tT = transpose(t)
     
     E1 = cos(tT) + 1j* sin(tT)
     eps = 10e-5
-    E2 = multiply(divide(eps+am, tile(am[N], (2*N+1, 1))+eps), E1)
-    E = concatenate((E2, tile(nt, (1, K))*E2), axis=1)
+    E2 = multiply(divide(eps+am, tile(am[midlen], (2*midlen+1, 1))+eps), E1)
+    E = concatenate((E2, tile(window_rangeT, (1, K))*E2), axis=1)
     
-    Ew = multiply(E, tile(wint, (1, 2*K))) 
-    Ewt = conjugate(transpose(Ew))
+    Ewindow = multiply(E, tile(windowT, (1, 2*K))) 
+    EwindowT = conjugate(transpose(Ewindow))
     
-    R = dot(Ewt, Ew)
+    R = dot(EwindowT, Ewindow)
     
     #assert(cond(R) < 10**(15)),'CAUTION!!! Bad condition of matrix.'
     
-    wins = multiply(wint, s)
-    arr = dot(Ewt, wins)
+    windowSignal = multiply(windowT, s)
+    arr = dot(EwindowT, windowSignal)
     x = dot(inv(R), arr)
     
-    ak = x[0:K]
-    bk = x[K:2*K+1]
+    amplitudes = x[0:K]
+    slopes = x[K:2*K+1]
     
-    return ak, bk
+    return amplitudes, slopes
 
-def phase_integr_interpolation(fm_hat, pm_hat, idx):
+def phase_integr_interpolation(fm_recon, ph_recon, indices):
     '''
     Computes phase interpolation using integration of instantaneous frequency.
 
     Parameters
     ----------
-    fm_hat : array_like
+    fm_recon : array_like
         The instantaneous frequencies.
-    pm_hat : array_like
+    ph_recon : array_like
         The instantaneous phases.
-    idx : array_like
+    indices : array_like
         The indices to be interpolated.
 
     Returns
@@ -663,24 +659,24 @@ def phase_integr_interpolation(fm_hat, pm_hat, idx):
         A simplified array-like object.
 
     '''
-    length = len(fm_hat)
+    length = len(fm_recon)
     
     pm_final = zeros(length, float)
     
-    for i in range(len(idx)-1):
-        pm_inst = lfilter([1], [1, -1], fm_hat[idx[i]:idx[i+1]+1])
-        pm_inst += tile(pm_hat[idx[i]]-pm_inst[0], len(pm_inst))
+    for i in range(len(indices)-1):
+        pm_inst = lfilter([1], [1, -1], fm_recon[indices[i]:indices[i+1]+1])
+        pm_inst += tile(ph_recon[indices[i]]-pm_inst[0], len(pm_inst))
         
-        M = round((end(pm_inst) - pm_hat[idx[i+1]])/(2*pi))
-        er = pi*(end(pm_inst)-pm_hat[idx[i+1]]-2*pi*M)/(2*(idx[i+1]-idx[i]))
-        t = arange(0, idx[i+1]-idx[i]+1)
-        ft = sin(pi*t/(idx[i+1]-idx[i]))
+        M = round((end(pm_inst) - ph_recon[indices[i+1]])/(2*pi))
+        er = pi*(end(pm_inst)-ph_recon[indices[i+1]]-2*pi*M)/(2*(indices[i+1]-indices[i]))
+        t = arange(0, indices[i+1]-indices[i]+1)
+        ft = sin(pi*t/(indices[i+1]-indices[i]))
         ftT = transpose(ft)
         pm_inst -= lfilter([1], [1, -1], ftT*er)
         
-        pm_final[idx[i]:idx[i+1]+1] = pm_inst
+        pm_final[indices[i]:indices[i+1]+1] = pm_inst
     
-    pm_final = pm_final[idx[0]:end(idx)+1]
+    pm_final = pm_final[indices[0]:end(indices)+1]
 
     return pm_final
 
@@ -699,9 +695,9 @@ def voicedUnvoicedFrames(s, fs: int, gender: str):
 
     Returns
     -------
-    P : array_like
+    frames : array_like
         An array of structures containing the time instants, if they are voiced and if they are speech.
-    p_step : int
+    frame_step : int
         The step of the frames.
 
     '''
@@ -725,8 +721,8 @@ def voicedUnvoicedFrames(s, fs: int, gender: str):
     
     step = int(round(0.005*fs))
     
-    N = (windowLen-1)/2
-    n = arange(-N-1, N, dtype=int)
+    midlen = (windowLen-1)/2
+    window_range = arange(-midlen-1, midlen, dtype=int)
     
     ti = arange(1,length,step)
     No_ti = len(ti)
@@ -734,9 +730,9 @@ def voicedUnvoicedFrames(s, fs: int, gender: str):
     isVoiced = zeros(No_ti, dtype=bool)
     
     for i, tith in enumerate(ti):
-        if tith > N and tith < length-N:
-            spEn = 20*log10(std(s[tith + n]))
-            spEn_smooth = 20*log10(std(s_smooth[tith + n]))
+        if tith > midlen and tith < length-midlen:
+            spEn = 20*log10(std(s[tith + window_range]))
+            spEn_smooth = 20*log10(std(s_smooth[tith + window_range]))
             
             isSpeech[i] = (spEn > s_speechNonspeech_thres).any()
             if isSpeech[i]:
@@ -745,11 +741,11 @@ def voicedUnvoicedFrames(s, fs: int, gender: str):
     isSpeech = medfilt(isSpeech, 5)
     isVoiced = medfilt(isVoiced, 5)
     
-    P = []
+    frames = []
     for i, tith in enumerate(ti):
-        P.append(Frame(tith, isSpeech[i], isVoiced[i]))
+        frames.append(Frame(tith, isSpeech[i], isVoiced[i]))
     
-    return P,  P[1].ti-P[0].ti
+    return frames,  frames[1].ti-frames[0].ti
     
 def swipep2(x, fs: int, speechFile: str, opt: dict, loadingScreen: bool = True):
     '''
