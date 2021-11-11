@@ -33,7 +33,7 @@ from SWIPE import swipep
 
 from scipy.linalg import LinAlgError
 
-def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str = 'other', step: int = 15,
+def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', step: int = 15,
                   maxAdpt: int = 10, pitchPeriods: int = 3, analysisWindow: int = 32, fullWaveform: bool = True,
                   fullBand: bool = True, eaQHM: bool = True, fc: int = 0, partials: int = 0,
                   extraInfo: bool = False, printPrompts: bool = True, loadingScreen: bool = True):
@@ -47,9 +47,11 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str = 'other', step: int 
     ----------
     speechFile : str
         The location of the mono .wav file to be analysed.
-    gender : str, optional
-        The gender of the speaker. Defines the pitch limit of SWIPEP. 'male' limit is [70, 180], 
-        'female' is [70, 180] and 'child' can also be used for [300, 600]. Any other input is [70, 500]. The default is 'other'.
+    gender : str or tuple, optional
+        The gender of the speaker, defining the pitch limit of SWIPEP.
+        If str, 'male' limit is [70, 180], 'female' is [70, 180] and 'child' can also be used for [300, 600]. Any other string is [70, 500]. 
+        If tuple, gender[0] is the minimum and gender[1] the maximum pitch limit.
+        The default is 'other'.
     step : int, optional
         The step size of the processing in samples. The default is 15.
     maxAdpt : int, optional
@@ -103,7 +105,10 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str = 'other', step: int 
         
     s2 = deepcopy(s)
         
-    if gender == 'male':
+    if isinstance(gender, tuple):
+        f0min = gender[0]
+        f0max = gender[1]
+    elif gender == 'male':
         f0min = 70
         f0max = 180
     elif gender == 'female':

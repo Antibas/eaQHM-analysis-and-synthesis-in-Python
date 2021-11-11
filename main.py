@@ -31,7 +31,7 @@ def main():
     
     print()
     
-    signal_reconstructed, SRER = eaQHMAnalysisAndSynthesis(filename, gender=gender, loadingScreen=False)
+    signal_reconstructed, SRER = eaQHMAnalysisAndSynthesis(filename, gender, loadingScreen=False)
     
     fs, signal = read(filename)
     signal = signal/normalize
