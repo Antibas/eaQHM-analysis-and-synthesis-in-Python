@@ -4,14 +4,14 @@
 from pylab import norm, nan, size, fix, polyval, polyfit
 from numpy import arange, power, log2, log10, zeros, round_, multiply, divide, reshape, \
 newaxis, argwhere, vstack, hanning, transpose, maximum, sqrt, asarray, \
-empty, ones, kron, NAN, argmax, concatenate, cos, logical_and, pi, dot
+empty, ones, kron, NAN, argmax, concatenate, cos, logical_and, pi, dot, inf
 
 from numpy.matlib import repmat
 from scipy.interpolate import interp1d
-from misc import transpose1dArray, is_prime
+from misc import transpose1dArray
 from matplotlib.pyplot import specgram, title, xlabel, ylabel
 
-def swipep(x, fs, speechFile, plim, dt, sTHR):
+def swipep(x, fs, speechFile, plim):
     """Swipe pitch estimation method.
 
     It estimates the pitch of the vector signal X with sampling frequency Fs
@@ -23,12 +23,15 @@ def swipep(x, fs, speechFile, plim, dt, sTHR):
     Pitches with a strength lower than STHR are treated as undefined.
     """
     
+    dt = 0.001
+    sTHR = -inf
     dlog2p = 1.0 / 96.0
     dERBs = 0.1
 
     t = arange(0, len(x) / float(fs), dt)    # Times
     dc = 4   # Hop size (in cycles)
     K = 2   # Parameter k for Hann window
+    
     # Define pitch candidates
     log2pc = arange(log2(plim[0]), log2(plim[len(plim) - 1]), dlog2p)
     pc = power(2, log2pc)
@@ -39,27 +42,29 @@ def swipep(x, fs, speechFile, plim, dt, sTHR):
     logWs = round_(log2(multiply(4 * K, (divide(float(fs), plim)))))
     ws = power(2, arange(logWs[1 - 1], logWs[2 - 1] - 1, -1))  # P2-WSs
     pO = 4 * K * divide(fs, ws)   # Optimal pitches for P2-WSs
+    
     # Determine window sizes used by each pitch candidate
     d = 1 + log2pc - log2(multiply(4 * K, (divide(fs, ws[1 - 1]))))
+    
     # Create ERBs spaced frequencies (in Hertz)
     fERBs = erbs2hz(arange(hz2erbs(pc[1 - 1] / 4), hz2erbs(fs / 2), dERBs))
 
     for i in range(0, len(ws)):
         ws[i] = int(ws[i])
         dn = round(dc * fs / pO[i])  # Hop size (in samples)
+        
         # Zero pad signal
         will = zeros((int(ws[i] / 2), 1))
         learn = reshape(x, -1, order='F')[:, newaxis]
         mir = zeros((int(dn + ws[i] / 2), 1))
         xzp = vstack((will, learn, mir))
         xk = reshape(xzp, len(xzp), order='F')
+        
         # Compute spectrum
         w = hanning(ws[i])  # Hann window
         o = max(0, round(ws[i] - dn))  # Window overlap
         [X, f, ti, im] = specgram(xk, NFFT=int(ws[i]), Fs=fs, window=w, noverlap=int(o))
-        title("Spectrogram of " + speechFile)
-        xlabel('Time (s)')
-        ylabel('Frequency (Hz)')
+
         # Interpolate at equidistant ERBs steps
         f = asarray(f)
         X1 = transpose(X)
@@ -69,6 +74,7 @@ def swipep(x, fs, speechFile, plim, dt, sTHR):
         interpol1 = transpose(interpol)
         M = maximum(0, interpol1)  # Magnitude
         L = sqrt(M)  # Loudness
+        
         # Select candidates that use this window size
         if i == (len(ws) - 1):
             j = transpose(argwhere(d - (i + 1) > -1))[0]
@@ -81,6 +87,7 @@ def swipep(x, fs, speechFile, plim, dt, sTHR):
             k1 = arange(0, len(j))  # transpose added by KG
             k = transpose(k1)
         Si = pitchStrengthAllCandidates(fERBs, L, pc[j])
+        
         # Interpolate at desired times
         if len(Si[0]) > 1:
             tf = []
@@ -91,10 +98,12 @@ def swipep(x, fs, speechFile, plim, dt, sTHR):
             Si = interp1d(ti, Si, 'linear', fill_value=nan)(t)
         else:
             Si = repmat(float('NaN'), len(Si), len(t))
+        
         lambda1 = d[j[k]] - (i + 1)
         mu = ones(size(j))
         mu[k] = 1 - abs(lambda1)
         S[j, :] = S[j, :] + multiply((transpose(kron(ones((len(Si[0]), 1)), mu))), Si)
+
 
     # Fine-tune the pitch using parabolic interpolation
     p = empty((len(Si[0]),))
@@ -132,16 +141,21 @@ def pitchStrengthAllCandidates(f, L, pc):
     sq = sqrt(ff)
 
     gh = repmat(sq, len(L), 1)
+    gh[gh == 0] = inf
     L = divide(L, gh)
     S = zeros((len(pc), len(L[0])))
     for j in range(0, (len(pc)) - 1):
         S[j, :] = pitchStrengthOneCandidate(f, L, pc[j])
     return S
 
-numArr = []
-
-
-
+def is_prime(n):
+    """
+    Function to check if the number is prime or not.
+    """
+    for i in range(2, int(sqrt(n)) + 1):
+        if n % i == 0:
+            return False
+    return True
 
 
 def primeArr(n):

@@ -9,18 +9,18 @@ from time import time, strftime, gmtime
 from structs import Deterministic, Frame
 from numpy import arange, zeros, blackman, hamming, \
 argwhere, insert, flipud, asarray, append, multiply, \
-real, imag, pi, divide, log10, log2, angle, diff, unwrap, sin, cos, \
+real, imag, pi, divide, log10, angle, diff, unwrap, sin, cos, \
 std, concatenate, tile, dot, ndarray, transpose, conjugate, ones, \
-inf, cumsum, fix, sqrt
+inf
 
-from numpy.linalg import inv, norm
+from numpy.linalg import inv
 
 from scipy.interpolate import interp1d
 from scipy.signal import lfilter
 from scipy.io.wavfile import read
 
 from misc import arrayByIndex, mytranspose, end, transpose1dArray, normalize, \
-isContainer, isEmpty, erbs2hz, hz2erbs, primes, apply, singlelize, ellipFilter, \
+isContainer, isEmpty, ellipFilter, \
 medfilt, min_interp_size
 
 from copy import deepcopy
@@ -31,7 +31,7 @@ from warnings import filterwarnings
 
 from SWIPE import swipep
 
-from scipy.linalg import LinAlgError
+
 
 def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', step: int = 15,
                   maxAdpt: int = 10, pitchPeriods: int = 3, analysisWindow: int = 32, fullWaveform: bool = True,
@@ -81,7 +81,7 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', s
     -------
     s_recon : (length) array_like
         The refined signal.
-    SRER : (a+1) array_like
+    SRER : list
         An array containing all the adaptation numbers of the signal.
     DetComponents : (No_ti) array_like, optional
         The Deterministic components of the signal. An array containing elements of Deterministic-class type. 
@@ -121,20 +121,7 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', s
         f0min = 70
         f0max = 500
     
-    try:
-        f0s = swipep(transpose(s2)[0], fs, speechFile, [f0min, f0max], 0.001, -inf)
-    except LinAlgError:
-        if printPrompts:
-            print("---- Initial SWIPEP failed. Using swipep2 ----\n")
-        opt_swipep = {
-            "dt": 0.001,
-            "plim": [f0min, f0max],
-            "dlog2p": 1/96,
-            "dERBs": 0.1,
-            "woverlap": 0.5,
-            "sTHR": -inf
-        }
-        f0s = swipep2(transpose(s2)[0], fs, speechFile, opt_swipep, loadingScreen)
+    f0s = swipep(transpose(s2)[0], fs, speechFile, [f0min, f0max])
 
     f0s = getLinear(f0s, arange(0, len(s2)-1, round(fs*5/1000))/fs)
        
@@ -179,7 +166,7 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', s
     No_ti = len(ti)
 
     DetComponents = [Deterministic() for _ in range(No_ti)]
-    SRER = []#zeros(maxAdpt+1, float)
+    SRER = []
     
     
     framei = (ti/frame_step)
@@ -449,7 +436,6 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', s
     if extraInfo:
         return s_recon, DetComponents, SRER, Kmax, Fmax, endTime
     
-    #return endTime
     return s_recon, DetComponents
 
 def iqhmLS_complexamps(s, f0range, window, fs: int, iterates: int = 0):
@@ -751,182 +737,6 @@ def voicedUnvoicedFrames(s, fs: int, gender: str):
         frames.append(Frame(tith, isSpeech[i], isVoiced[i]))
     
     return frames,  frames[1].ti-frames[0].ti
-    
-def swipep2(s, fs: int, speechFile: str, opt: dict, loadingScreen: bool = True):
-    '''
-    Performs a pitch estimation of the signal for every time instant.
-
-    Parameters
-    ----------
-    s : array_like
-        The signal to be estimated.
-    fs : int
-        The sampling frequency.
-    speechFile : str
-        The file name.
-    opt : dict
-        A dictionary containing all necessary parameters for the function to run. It must contain the following parameters:
-        ---- dt: float - Estimation is performed every dt seconds
-        ---- plim: array[2] - An array containing 2 numbers, the first being the minimum frequency
-            where the pitch is searched and the second being the maximum frequency
-        ---- dlog2p: float - The units the signal is distributed in samples on a base-2 logarithm scale. 
-        ---- dERBs: float - The step size of ERBs
-        ---- woverlap: float - The overlap of the Hanning window
-        ---- sTHR: int - The threshold of the pitch strength.
-        
-    loadingScreen : bool, optional
-        Determines if a tqdm loading screen will be displayed in the console. The default is True.
-
-
-    Returns
-    -------
-    (3,...) array_like
-        An array containing the time instants, the estimation for each instant and the strength of each estimation.
-
-    '''
-    from numpy import power, empty, polyfit, polyval, nan
-    from misc import myHann, arrayMax, mySpecgram
-    
-    t = arange(0, len(s)/fs+opt['dt'], opt['dt'])
-    
-    log2pc = arange(log2(opt['plim'][0]), log2(opt['plim'][1]), opt['dlog2p'])
-                
-    pc = power(2, log2pc)
-    
-    S = zeros((len(pc), len(t)))
-    
-    logWs = apply(log2(divide(8*fs, opt['plim'])), round)
-    
-    ws = power(2, arange(logWs[0], logWs[1]-1, -1))
-    
-    pO = divide(8*fs,ws)
-    
-    d = 1 + log2pc - log2(pO[0])
-    
-    fERBs = erbs2hz(arange(hz2erbs(min(pc)/4), hz2erbs(fs/2), opt['dERBs']))
-    
-    if loadingScreen:
-        wsloop = tqdm(total=len(ws), position=0, leave=True)
-                      
-    for i in range(len(ws)):
-        if loadingScreen:
-            wsloop.set_description("SWIPEP".format(i))
-        
-        dn = int(max(1, round(8*(1-opt['woverlap'])*fs/pO[i])))
-        
-        xzp = concatenate((zeros((int(ws[i]/2))), s, zeros((dn + int(ws[i]/2)))))
-        
-        w = myHann(ws[i])
-        o = int(max(0, round(ws[i] - dn)))
-        
-        X, f, ti = mySpecgram(xzp, int(ws[i]), fs, w, o)
-
-        ip = i+1
-        if len(ws) == 1:
-            j = transpose1dArray(apply(pc, int))
-            k = []
-        elif i == len(ws)-1:
-            j = argwhere(d - ip > -1)
-            k = argwhere(d[j] - ip < 0)
-        elif i == 0:
-            j = argwhere(d - ip < 1)
-            k = argwhere(d[j] - ip > 0)
-        else:
-            j = argwhere(abs(d - ip) < 1)
-            k = arange(0, len(j))
-        
-        fERBs = fERBs[singlelize(argwhere(fERBs > pc[j[0]]/4)[0]):]
-        
-        L = sqrt(arrayMax(0, interp1d(f, abs(X), kind=3, fill_value=0, axis=0)(fERBs)))
-       
-        Si = pitchStrengthAllCandidates(fERBs, L, pc[j]) 
-        
-        if len(Si[0]) > 1:
-            Si = interp1d(ti, Si, 'linear', fill_value=nan)(t)
-        else:
-            Si = empty((len(Si), len(t)), dtype=object)
-            
-        if isContainer(k[0]):
-            k = k[:, 0]
-        
-        lamda = d[ j[k] ] - (i+1)
-        
-        mu = ones( len(j) )
-        mu[k] = 1 - abs( transpose(lamda) )
-        
-        S[transpose(j)[0],:] += multiply(transpose(tile(mu,(len(Si[1]), 1))), Si)
-        
-        if loadingScreen:
-            wsloop.update(1)
-           
-    if loadingScreen:
-        wsloop.close()
-       
-    f0est = empty((len(S[0]), 1), dtype=object)
-    strength = empty((len(S[0]), 1), dtype=object)
-    for j in range(len(S[0])):
-        strength[j] = max(S[:, j])
-        i = singlelize(argwhere(S[:, j] == strength[j])[0])
-        
-        if strength[j] < opt['sTHR']:
-            continue
-        
-        if i == 0 or i == len(pc)-1:
-            f0est[j] = pc[i]
-        else:
-            I = arange(i-1, i+2)
-            tc = 1 / pc[I]
-            ntc = (tc/tc[1] - 1) * 2*pi
-            c = polyfit(ntc, S[I, j], 2)
-            
-            ftc_step = 1/12/100
-            ftc = 1/power(2, arange(log2(pc[I[0]]), log2(pc[I[2]])+ftc_step, ftc_step))
-            nftc = (ftc/tc[1] - 1) * 2*pi
-            arr = polyval(c, nftc)
-            strength[j] = max(arr)
-            k = singlelize(argwhere(arr == strength[j]))
-            f0est[j] = power(2, log2(pc[I[0]]) + k/12/100)
-    
-    return concatenate((transpose1dArray(t), f0est, strength), axis=1)
-
-def pitchStrengthAllCandidates(f, L, pc):
-    S = zeros((len(pc), len(L[1])))
-    k = zeros(len(pc)+1, dtype=int)
-    for j in range(len(k)-1):
-        k[j+1] = k[j] + argwhere( f[k[j]:] > pc[j]/4)[0]
-        
-
-    k = k[1:]
-    
-    N = sqrt(flipud(cumsum(flipud(multiply(L,L)), axis=0)))
-    
-    for j in range(len(pc)):
-        n = deepcopy(N[k[j], :])
-        n[n==0] = inf
-        NL = L[k[j]:,:] / tile( n, (len(L)-k[j], 1))
-        S[j,:] = pitchStrengthOneCandidate(f[k[j]:], NL, pc[j])
-    
-    return S
-
-def pitchStrengthOneCandidate(f, NL, pc):
-    n = int(singlelize(fix( end(f)/pc - 0.75 )))
-    if n==0:
-        return None
-    
-    k = zeros(len(f))
-    q = f / pc
-    
-    pr = concatenate(([1], primes(n)))
-    for i in pr:
-        a = abs( q - i )
-        p = argwhere(a < .25)
-        k[p] = cos(2*pi*q[p])
-        v = argwhere((0.25 < a) & (a < 0.75))
-        k[v] = k[v] + cos( 2*pi * q[v] ) / 2
-    k = k * apply(1/f, sqrt)
-    k = k / norm( k[k>0] )
-    
-    return dot(transpose(k), NL)
 
 def getLinear(v, t):
     '''

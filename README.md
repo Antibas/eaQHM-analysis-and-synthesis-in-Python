@@ -33,11 +33,8 @@ Here is an example of the output of the code running *SA19.wav* in [Spyder](http
 And here are the plots produced:
 
 ![](img/frequencySpec.png)
+![](img/frequencySpec2.png)
 ![](img/timeDom.png)
-
-## Known Issues
-* This code may take a lot of time, even for small speech files. Time may also vary based on the CPU Usage.
-* In some cases the SWIPEP pitch estimator may raise a ```LinAlgError```, in which case an alternative SWIPEP pitch estimator is used.
 
 
 ## Code citation

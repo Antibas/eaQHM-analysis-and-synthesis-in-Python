@@ -20,31 +20,6 @@ from copy import deepcopy
 normalize = 32768
 min_interp_size = 4
 
-def matToObject(filename: str):
-    '''
-    Loads a parameter file with name filename and
-    converts it into a dictionary.
-    
-    ----INPUT PARAMETERS----
-    filename: the location of a parameter file.
-    
-    ----OUTPUT PARAMETERS----
-    A dictionary containing all stored data in 
-    that parameter file.
-    '''
-    
-    param = loadmat(filename)
-    del param["__header__"]
-    del param["__version__"]
-    del param["__globals__"]
-    
-    obj = {}
-    for key, value in param.items():
-        obj[key] = singlelize(value)
-    
-    return obj
-
-
 def transpose1dArray(x):
     '''
     Transposes a 1d array-like.
@@ -165,33 +140,6 @@ def apply(v, lamda):
         return asarray(vv)
     raise TypeError(type(v))   
 
-def is_prime(n):
-    """
-    Function to check if the number is prime or not.
-    """
-    for i in range(2, int(sqrt(n)) + 1):
-        if n % i == 0:
-            return False
-    return True
-
-def primes(N):
-    '''
-    Returns a row vector of prime numbers up to n.
-    '''
-    return asarray([n for n in range(N) if is_prime(n)])
-
-def hz2erbs(hz):
-    '''
-    Converts Hz to erbs.
-    '''
-    return 6.44 * ( log2( 229 + hz ) - 7.84 )
-
-def erbs2hz(erbs):
-    '''
-    Converts erbs to Hz.
-    '''
-    return power(2, erbs/6.44 + 7.84) - 229
-
 def isComplex(a):
     '''
     Returns if a is a complex number.
@@ -239,65 +187,6 @@ def ellipFilter(s, fs, fc, ftype='highpass'):
     '''
     bHigh, aHigh = ellip(6, .5, 60, 2*fc/fs, ftype)
     return filtfilt(bHigh, aHigh, s)
-
-def arrayMax(n, a):
-    a2 = deepcopy(a)
-    for i in range(len(a)):
-        for j in range(len(a[i])):
-            if a[i][j] < n:
-                a2[i][j] = n
-    return a2
-
-def myHann(N):
-    '''
-    An optimized implementation of numpy.hanning.
-    '''
-    N += 1
-    n = arange(1, N)
-    return .5*(1 - cos(2*pi*n/N))
-
-def mySpecgram(x,nfft,fs,window,noverlap):
-    '''
-    A different implementation of specgram
-    '''
-    from numpy.fft import fft
-                
-    nx = len(x)
-    
-    nwind = len(window)
-    
-    if nx < nwind:
-        x[nwind-1] = 0
-        nx = nwind
-        
-    ncol = int(fix((nx-noverlap)/(nwind-noverlap)))
-    
-    colindex = arange(0, ncol)*(nwind-noverlap)
-    
-    rowindex = arange(nwind)
-    
-    if len(x)<(nwind+colindex[ncol-1]-1):
-        x[nwind+colindex[ncol-1]-2] = 0
-    
-    y = x[tile(transpose1dArray(rowindex), ncol)+tile(transpose1dArray(colindex), nwind).transpose()]
-    
-    y2 = multiply(tile(transpose1dArray(window), ncol), y)
-    
-    y3 = fft(y2.transpose(),nfft).transpose()
-    
-    if not any(imag(x)):
-        if nfft % 2 == 0:
-            select = arange(0, (nfft+1)/2, dtype=int)
-        else:
-            select = arange(0, (nfft)/2, dtype=int)
-    
-        y3 = y3[select, :]
-    else:
-        select = arange(0, nfft)
-    
-    f = (select)*fs/nfft
-    t = colindex/fs
-    return y3, f, t
 
 def medfilt(x, p):
     '''
