@@ -10,8 +10,7 @@ from structs import Deterministic, Frame
 from numpy import arange, zeros, blackman, hamming, \
 argwhere, insert, flipud, asarray, append, multiply, \
 real, imag, pi, divide, log10, angle, diff, unwrap, sin, cos, \
-std, concatenate, tile, dot, ndarray, transpose, conjugate, ones, \
-inf
+std, concatenate, tile, dot, ndarray, transpose, conjugate, ones
 
 from numpy.linalg import inv
 

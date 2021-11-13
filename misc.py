@@ -4,18 +4,11 @@ Created on Sun Jan 31 17:06:52 2021
 
 @author: Panagiotis Antivasis
 """
-from scipy.io import loadmat
-
-from numpy import asarray, ndarray, zeros, transpose, flip, power, complex128, \
-uint8, int8, int16, int32, int64, float16, float32, float64, arange, cos, pi, \
-fix, multiply, imag, tile, sqrt, concatenate, fliplr, flipud, ones
+from numpy import asarray, ndarray, zeros, transpose, flip, complex128, \
+uint8, int8, int16, int32, int64, float16, float32, float64, concatenate, fliplr, flipud, ones
 
 from statistics import median
 from scipy.signal import ellip, filtfilt
-
-from math import log2
-
-from copy import deepcopy
 
 normalize = 32768
 min_interp_size = 4
