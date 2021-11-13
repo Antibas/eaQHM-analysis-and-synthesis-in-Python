@@ -24,7 +24,7 @@ What you have to do is:
 2. Run the code.
 3. Write the name of the *.wav* file to be processed in the console.
 4. Specify the gender of the speaker ("male", "female" or other). You may also use "child" as an input.
-5. The program will print some prompts showing the **Signal-to-Reconstruction-Ratio (SRER)** of each adaptation [[1]](#Reference), and some plots will be generated.
+5. The program will print some prompts showing the **Signal-to-Reconstruction-Ratio (SRER)** [[1]](#Reference) of each adaptation and some plots will be generated.
 6. After the program terminates, a *\*filename\*_reconstructed.wav* file will be generated.
 
 Here is an example of the output of the code running *SA19.wav* with default optional parameters:
