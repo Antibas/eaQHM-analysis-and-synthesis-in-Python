@@ -17,7 +17,7 @@ pip install -r requirements.txt
 ```
 
 ## How to Run
-A *main.py* file is provided, which executes **eaQHMAnalysisAndSynthesis** on a speech signal, whose name is given as an input on the console. The gender of the speaker may also be specified. A sample from a female speaker named *SA19.wav* is also included, but you can use any mono *.wav* file you want.
+A *main.py* file is provided, which executes **eaQHMAnalysisAndSynthesis** on a speech signal, whose name is given as an input on the console. The gender of the speaker may also be specified. A sample from a female speaker, named *SA19.wav* is also included, but you can use any mono *.wav* file you want.
 
 What you have to do is:
 1. Open *main.py*.
@@ -27,7 +27,7 @@ What you have to do is:
 5. The program will print some prompts showing the **Signal-to-Reconstruction-Ratio (SRER)** [[1]](#Reference) of each adaptation and some plots will be generated.
 6. After the program terminates, a *\*filename\*_reconstructed.wav* file will be generated.
 
-Here is an example of the output of the code running *SA19.wav* with default optional parameters:
+Here is an example of the output of the code running *SA19.wav*:
 
 ![](img/SA19out.JPG)
 
@@ -36,6 +36,7 @@ And here are the plots produced:
 ![](img/frequencySpec.png)
 ![](img/frequencySpec2.png)
 ![](img/timeDom.png)
+![](img/timeDom2.png)
 
 Feel free to modify *main.py* and the parameters of **eaQHMAnalysisAndSynthesis** as you wish.
 

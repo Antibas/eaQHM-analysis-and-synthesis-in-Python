@@ -9,7 +9,7 @@ empty, ones, kron, NAN, argmax, concatenate, cos, logical_and, pi, dot, inf
 from numpy.matlib import repmat
 from scipy.interpolate import interp1d
 from misc import transpose1dArray
-from matplotlib.pyplot import specgram, title, xlabel, ylabel
+from matplotlib.pyplot import specgram
 
 def swipep(x, fs, speechFile, plim):
     """Swipe pitch estimation method.

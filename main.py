@@ -8,11 +8,11 @@ Created on Sun Jan 31 17:16:16 2021
 from functions import eaQHMAnalysisAndSynthesis
 from numpy import arange, float32
 from scipy.io.wavfile import write
-from matplotlib.pyplot import subplots, show, specgram, xlabel, ylabel, title
+from matplotlib.pyplot import plot, show, specgram, xlabel, ylabel, title
 from scipy.io.wavfile import read
 from misc import normalize
 
-def plot(t, t_reconst, signal, signal_reconst, name, fs):
+def plotGraphs(t, t_reconst, signal, signal_reconst, name, fs):
     specgram(signal, Fs=fs)
     title("Spectrogram of " + name)
     xlabel('Time (s)')
@@ -25,17 +25,18 @@ def plot(t, t_reconst, signal, signal_reconst, name, fs):
     ylabel('Frequency (Hz)')
     show()
     
-    fig, (ax1, ax2) = subplots(2, sharex=True)
-    ax1.plot(t, signal)
-    ax1.set_title(name)
-    ax1.set_ylabel('Amplitude')
-    ax2.plot(t_reconst, signal_reconst)
-    ax2.set_title(name + ' reconstructed')
-    ax2.set_xlabel('Time (s)')
-    ax2.set_ylabel('Amplitude')
+    plot(t, signal)
+    title(name)
+    xlabel('Time (s)')
+    ylabel('Amplitude')
+    show()
     
-    show()    
-
+    plot(t_reconst, signal_reconst)
+    title(name + ' reconstructed')
+    xlabel('Time (s)')
+    ylabel('Amplitude')
+    show()
+    
 def main():
     filename = input("Write the name of the file to be processed: ")
     gender = input("You may include a gender (male, female, child or other): ")
@@ -50,7 +51,7 @@ def main():
     t = arange(0, len(signal)/fs, dt)
     
     t_reconstructed = arange(0, len(signal_reconstructed)/fs, dt)
-    plot(t, t_reconstructed, signal, signal_reconstructed, filename, fs)
+    plotGraphs(t, t_reconstructed, signal, signal_reconstructed, filename, fs)
     
     write(filename[0:len(filename)-4]+"_reconstructed.wav", fs, float32(signal_reconstructed))
     
