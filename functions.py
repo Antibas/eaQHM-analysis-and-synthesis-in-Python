@@ -209,7 +209,8 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', s
                         window_range = arange(-window_lengths[i]-1,window_lengths[i]) 
                         window = blackman(2*window_lengths[i]+1)
                         
-                        amplitudes, slopes, fmismatch = iqhmLS_complexamps(s[window_range + tith], f0range, window, fs)
+                        amplitudes, slopes = iqhmLS_complexamps(s[window_range + tith], f0range, window, fs)
+                        fmismatch = zeros(K, float)
                     else:
                         window_range = arange(-window_lengths[i]-1,window_lengths[i])
                         window = hamming(2*window_lengths[i]+1)
@@ -334,7 +335,7 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', s
                             ph_recon[tith-1][k] = angle(amplitudes[k])
                                 
                             if a == 0:
-                                fm_recon[tith-1][k] = (k+1)*f0 + fmismatch[k]
+                                fm_recon[tith-1][k] = (k+1)*f0
                             elif f0 > f0min:
                                 fm_recon[tith-1][k] = fm_current[tith-1][k] + fmismatch[k]
                             else:
@@ -437,7 +438,7 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', s
     
     return s_recon, DetComponents
 
-def iqhmLS_complexamps(s, f0range, window, fs: int, iterates: int = 0):
+def iqhmLS_complexamps(s, f0range, window, fs: int):
     '''
     Computes iteratively the parameters of first order complex polynomial
     model using Least Squares. 
@@ -452,8 +453,6 @@ def iqhmLS_complexamps(s, f0range, window, fs: int, iterates: int = 0):
         The window of the signal to be computed.
     fs : int
         The sampling frequency.
-    iterates : int, optional
-        The number of iterations. The default is 0.
 
     Returns
     -------
@@ -461,8 +460,6 @@ def iqhmLS_complexamps(s, f0range, window, fs: int, iterates: int = 0):
         Amplitude of harmonics.
     slopes : array_like
         Slope of harmonics.
-    fmismatch : array_like
-        Frequency mismatch.
 
     '''
     windowT = transpose1dArray(window)
@@ -473,36 +470,25 @@ def iqhmLS_complexamps(s, f0range, window, fs: int, iterates: int = 0):
     
     window_range = arange(-midlen,midlen+1)
     window_rangeT = transpose1dArray(window_range)
+       
+    t = (window_rangeT*2*pi*f0range)/fs 
+    E = cos(t) + 1j* sin(t)
+    E = concatenate((E, tile(window_rangeT, (1, K))*E), axis=1)
     
-    amplitudes = zeros(K, float)
-    slopes = zeros(K, float)
-    fmismatch = zeros(K, float)
-    for i in range(iterates+1):
-        if i != 0:
-            fmismatch += fs/(2*pi)*((imag(slopes)*real(amplitudes) - imag(amplitudes)*real(slopes))/abs(amplitudes)**2)
-            
-            diff_f0range = diff([-fs/2, f0range, fs/2])/2
-            indices = argwhere(fmismatch < -diff_f0range[0:K] or fmismatch > diff_f0range[1:len(diff_f0range)])
-            fmismatch = arrayByIndex(indices, 0)
-        
-        t = (window_rangeT*2*pi*f0range)/fs 
-        E = cos(t) + 1j* sin(t)
-        E = concatenate((E, tile(window_rangeT, (1, K))*E), axis=1)
-        
-        Ewindow = multiply(tile(windowT, (1, 2*K)), E)
-        EwindowT = conjugate(transpose(Ewindow))
-        R = dot(EwindowT, Ewindow) 
+    Ewindow = multiply(tile(windowT, (1, 2*K)), E)
+    EwindowT = conjugate(transpose(Ewindow))
+    R = dot(EwindowT, Ewindow) 
 
-        #assert(cond(R) < 10**(10)),'CAUTION!!! Bad condition of matrix.'
-        
-        windowSignal = multiply(windowT, s)
-        arr = dot(EwindowT, windowSignal)
-        ampsl = dot(inv(R), arr)
-            
-        amplitudes = ampsl[0:K]
-        slopes = ampsl[K:2*K+1]
+    #assert(cond(R) < 10**(10)),'CAUTION!!! Bad condition of matrix.'
     
-    return amplitudes, slopes, fmismatch
+    windowSignal = multiply(windowT, s)
+    arr = dot(EwindowT, windowSignal)
+    ampsl = dot(inv(R), arr)
+        
+    amplitudes = ampsl[0:K]
+    slopes = ampsl[K:2*K+1]
+    
+    return amplitudes, slopes
     
 def aqhmLS_complexamps(s, fm, window, fs):
     '''
