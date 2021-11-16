@@ -38,8 +38,6 @@ And here are the plots produced:
 ![](img/timeDom.png)
 ![](img/timeDom2.png)
 
-Feel free to modify *main.py* and the parameters of **eaQHMAnalysisAndSynthesis** as you wish.
-
 ## Code citation
 If you wish to use and cite this code, please use the following:
 * Panagiotis Antivasis, eaQHM analysis and synthesis system, (2021), GitHub repository, https://github.com/Antibas/eaQHM-analysis-and-synthesis-in-Python

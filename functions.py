@@ -35,7 +35,7 @@ from SWIPE import swipep
 def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', step: int = 15,
                   maxAdpt: int = 10, pitchPeriods: int = 3, analysisWindow: int = 32, fullWaveform: bool = True,
                   fullBand: bool = True, eaQHM: bool = True, fc: int = 0, partials: int = 0,
-                  extraInfo: bool = False, printPrompts: bool = True, loadingScreen: bool = True):
+                  printPrompts: bool = True, loadingScreen: bool = True):
     '''
     Performs adaptive Quasi-Harmonic Analysis of Speech
     using the extended adaptive Quasi-Harmonic Model and decomposes 
@@ -58,7 +58,7 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', s
     pitchPeriods : int, optional
         The number of analysis window size, in pitch periods. The default is 3.
     analysisWindow : int, optional
-        The samples of the pitch analysis window, where the analysis starts. The default is 32.
+        The steps of the pitch analysis window, where the analysis starts. The default is 32.
     fullWaveform : bool, optional
         Determines if a full waveform length analysis will be performed. The default is True.
     fullBand : bool, optional
@@ -69,8 +69,6 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', s
         Applies a high pass filtering at the specified Hz before the analysis starts. If <= 0, no filter is applied. The default is 0.
     partials : int, optional
         The number of partials to be used. If <= 0, it is determined by the pitch estimations. The default is 0.
-    extraInfo : bool, optional
-        Determines if 
     printPrompts : bool, optional
         Determines if prompts of this process will be printed. The default is True.
     loadingScreen : bool, optional
@@ -82,15 +80,10 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', s
         The refined signal.
     SRER : list
         An array containing all the adaptation numbers of the signal.
-    DetComponents : (No_ti) array_like, optional
+    DetComponents : (No_ti) array_like
         The Deterministic components of the signal. An array containing elements of Deterministic-class type. 
-        Only returned if extraInfo == True.
-    Kmax : int, optional
-        The number of partials used. Only returned if extraInfo == True.
-    Fmax : int, optional
-        The maximum frequency of the analysis. Only returned if extraInfo == True.
-    endTime : time, optional
-        The total time the process takes. Only returned if extraInfo == True.
+    endTime : float
+        The total time the process takes in seconds.
     '''
     filterwarnings("ignore")
     startTime = time()
@@ -210,7 +203,7 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', s
                         window = blackman(2*window_lengths[i]+1)
                         
                         amplitudes, slopes = iqhmLS_complexamps(s[window_range + tith], f0range, window, fs)
-                        fmismatch = zeros(K, float)
+                        fmismatch = zeros(len(f0range), float)
                     else:
                         window_range = arange(-window_lengths[i]-1,window_lengths[i])
                         window = hamming(2*window_lengths[i]+1)
@@ -433,11 +426,8 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', s
         print('Signal adapted to {} dB SRER'.format(round(max(SRER), 6)))
         print('Total Time: {}\n\n'.format(strftime("%H:%M:%S", gmtime(endTime))))
     
-    if extraInfo:
-        return s_recon, DetComponents, SRER, Kmax, Fmax, endTime
+    return s_recon, SRER, DetComponents, endTime
     
-    return s_recon, DetComponents
-
 def iqhmLS_complexamps(s, f0range, window, fs: int):
     '''
     Computes iteratively the parameters of first order complex polynomial
