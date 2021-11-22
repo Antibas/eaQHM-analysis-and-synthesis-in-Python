@@ -1,14 +1,12 @@
-# extended adaptive Quasi-Harmonic Analysis and Synthesis of Speech in Python
+# AM-FM decomposition of Speech using the extended adaptive Quasi-Harmonic Model
 
-### Author: Panagiotis Antivasis, Undergraduate Student at [Computer Science Department - University of Crete](https://www.csd.uoc.gr/), November 2021.
+### Author: Panagiotis Antivasis, Nov. 2021
 
 ## Introduction
-The following repository is the source code corresponding to the thesis of **Panagiotis Antivasis**, an undergraduate [Computer Science](https://www.csd.uoc.gr/) student at the [University of Crete](https://www.uoc.gr/). 
-
-This code is built upon a speech analysis and synthesis system from paper [[1]](#Reference). The system in the so-called is named **extended adaptive Quasi-Harmonic Model (eaQHM)** and this source code implements it into **Python**.
+This code is built upon a speech analysis and synthesis system from paper [[1]](#Reference). The system is the so-called **extended adaptive Quasi-Harmonic Model (eaQHM)** and this is the Python source code implementation.
 
 ## eaQHMAnalysisAndSynthesis
-**eaQHMAnalysisAndSynthesis** is a function that performs **extended adaptive Quasi-Harmonic Analysis and Synthesis** in a signal. In other words, it receives a *.wav* file and some other optional parameters and decomposes speech into AM-FM components according to the model mentioned, by producing a [Deterministic component](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.16.5702&rep=rep1&type=pdf) of the signal and then iteratively refining it, until the reconstructed signal converges in *quasi-harmonicity* [[1]](#Reference). 
+**eaQHMAnalysisAndSynthesis** is a function that performs **extended adaptive Quasi-Harmonic Analysis and Synthesis** of a speech signal. In other words, it receives a *.wav* file and some other optional parameters and decomposes speech into AM-FM components according to the model mentioned, by producing a [Deterministic component](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.16.5702&rep=rep1&type=pdf) of the signal and then iteratively refining it, until the reconstructed signal converges in *quasi-harmonicity* [[1]](#Reference). 
 
 ## Prerequisites & Requirements
 **Python 3.8.x** and up. It is also highly suggested to use [Spyder](https://www.spyder-ide.org/) environment as the whole code was tested in it. Before you run the code, make sure to install all requirements by executing:
@@ -39,10 +37,10 @@ And here are the plots produced:
 ![](img/timeDom2.png)
 
 ## Code citation
-If you wish to use and cite this code, please use the following:
+If you wish to use this code, please cite it using the following:
 * Panagiotis Antivasis, eaQHM analysis and synthesis system, (2021), GitHub repository, https://github.com/Antibas/eaQHM-analysis-and-synthesis-in-Python
 
-This code is mostly based on the following publication: 
+If you wish to cite the main paper on which this code has been developed, please use the following:
 * G. P. Kafentzis, O. Rosec and Y. Stylianou, "Robust full-band adaptive Sinusoidal analysis and synthesis of speech," 2014 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP), 2014, pp. 6260-6264, doi: 10.1109/ICASSP.2014.6854808.
 
 ## Reference
