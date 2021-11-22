@@ -6,7 +6,7 @@
 This code is built upon a speech analysis and synthesis system from paper [[1]](#Reference). The system is the so-called **extended adaptive Quasi-Harmonic Model (eaQHM)** and this is the Python source code implementation.
 
 ## eaQHMAnalysisAndSynthesis
-**eaQHMAnalysisAndSynthesis** is a function that performs **extended adaptive Quasi-Harmonic Analysis and Synthesis** of a speech signal. In other words, it receives a *.wav* file and some other optional parameters and decomposes speech into AM-FM components according to the model mentioned, by producing a [Deterministic component](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.16.5702&rep=rep1&type=pdf) of the signal and then iteratively refining it, until the reconstructed signal converges in *quasi-harmonicity* [[1]](#Reference). 
+**eaQHMAnalysisAndSynthesis** is a function that performs **extended adaptive Quasi-Harmonic Analysis and Synthesis** of a speech signal. In other words, it receives a *.wav* file and some other optional parameters and decomposes speech into AM-FM components according to the model mentioned, by producing a fully deterministic component of the signal and then iteratively refining it, until the reconstructed signal converges in *quasi-harmonicity* [[1]](#Reference). 
 
 ## Prerequisites & Requirements
 **Python 3.8.x** and up. It is also highly suggested to use [Spyder](https://www.spyder-ide.org/) environment as the whole code was tested in it. Before you run the code, make sure to install all requirements by executing:
