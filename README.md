@@ -14,6 +14,25 @@ This code is built upon a speech analysis and synthesis system from paper [[1]](
 pip install -r requirements.txt
 ```
 
+## Features
+* Both **aQHM** and **eaQHM** are supported.
+* Preprocessing high pass filter option.
+* [SWIPEP pitch estimator](http://www.kerwa.ucr.ac.cr:8080/bitstream/handle/10669/536/dissertation.pdf) is used for the ```f0``` estimations, implemented in Python by Disha Garg: https://github.com/dishagarg/SWIPE
+	* The user may use custom pitch limits for the estimation.
+* Full-band analysis.
+* Either full waveform or only voiced parts are analyzed.
+* Plots are viewed showing the signal in time and frequency domain before and after reconstruction.
+* A basic loading screen may be displayed by setting 
+```Python
+loadingScreen=True
+```
+as a parameter, which will enable a [tqdm](https://tqdm.github.io/) loading bar in the console.
+* Prompts may be disabled for speed by setting 
+```Python
+printPrompts=True
+```
+as a parameter.
+
 ## How to Run
 A *main.py* file is provided, which executes **eaQHMAnalysisAndSynthesis** on a speech signal, whose name is given as an input on the console. The gender of the speaker may also be specified. A sample from a female speaker, named *SA19.wav* is also included, but you can use any mono *.wav* file you want.
 
@@ -31,8 +50,6 @@ Here is an example of the output of the code running *SA19.wav*:
 
 And here are the plots produced:
 
-![](img/frequencySpec.png)
-![](img/frequencySpec2.png)
 ![](img/timeDom.png)
 ![](img/timeDom2.png)
 

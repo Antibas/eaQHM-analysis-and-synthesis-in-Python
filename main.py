@@ -8,7 +8,7 @@ Created on Sun Jan 31 17:16:16 2021
 from functions import eaQHMAnalysisAndSynthesis
 from numpy import arange, float32
 from scipy.io.wavfile import write
-from matplotlib.pyplot import plot, show, specgram, xlabel, ylabel, title, figure
+from matplotlib.pyplot import plot, show, xlabel, ylabel, title
 from scipy.io.wavfile import read
 from misc import normalize
 
