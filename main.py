@@ -13,6 +13,11 @@ from scipy.io.wavfile import read
 from misc import normalize
 
 def plotGraphs(t, t_reconst, signal, signal_reconst, name):
+    title("Spectrogram of " + name)
+    xlabel('Time (s)')
+    ylabel('Frequency (Hz)')
+    show()
+    
     plot(t, signal)
     title(name)
     xlabel('Time (s)')

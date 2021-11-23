@@ -64,7 +64,7 @@ def swipep(x, fs, speechFile, plim):
         w = hanning(ws[i])  # Hann window
         o = max(0, round(ws[i] - dn))  # Window overlap
         [X, f, ti, im] = specgram(xk, NFFT=int(ws[i]), Fs=fs, window=w, noverlap=int(o))
-
+        
         # Interpolate at equidistant ERBs steps
         f = asarray(f)
         X1 = transpose(X)

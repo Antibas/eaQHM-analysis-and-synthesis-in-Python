@@ -50,6 +50,7 @@ Here is an example of the output of the code running *SA19.wav*:
 
 And here are the plots produced:
 
+![](img/freq.png)
 ![](img/timeDom.png)
 ![](img/timeDom2.png)
 
