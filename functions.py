@@ -34,8 +34,7 @@ from SWIPE import swipep
 
 def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', step: int = 15,
                   maxAdpt: int = 10, pitchPeriods: int = 3, analysisWindow: int = 32, fullWaveform: bool = True,
-                  fullBand: bool = True, eaQHM: bool = True, fc: int = 0, partials: int = 0,
-                  printPrompts: bool = True, loadingScreen: bool = True):
+                  fc: int = 0, partials: int = 0, printPrompts: bool = True, loadingScreen: bool = True):
     '''
     Performs adaptive Quasi-Harmonic Analysis of Speech
     using the extended adaptive Quasi-Harmonic Model and decomposes 
@@ -61,10 +60,6 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', s
         The steps of the pitch analysis window, where the analysis starts. The default is 32.
     fullWaveform : bool, optional
         Determines if a full waveform length analysis will be performed. The default is True.
-    fullBand : bool, optional
-        Determines if a full band analysis-in-voiced-frames will be performed. The default is True.
-    eaQHM : bool, optional
-        Determines if an adaptive Quasi-Harmonic Model or an extended adaptive Quasi-Harmonic Model will be used. The default is True.
     fc : int, optional
         Applies a high pass filtering at the specified Hz before the analysis starts. If <= 0, no filter is applied. The default is 0.
     partials : int, optional
@@ -117,16 +112,12 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', s
 
     f0s = getLinear(f0s, arange(0, len(s2)-1, round(fs*5/1000))/fs)
        
-    if fullBand:
-        Fmax = int(fs/2-200)
+    Fmax = int(fs/2-200)
         
-        if partials > 0:
-            Kmax = partials
-        else:
-            Kmax = int(round(Fmax/min(f0s[:,1])) + 10)
+    if partials > 0:
+        Kmax = partials
     else:
-        Fmax = int(fs/2-2000)
-        Kmax = int(round(Fmax/min(f0s[:,1])) + 10) 
+        Kmax = int(round(Fmax/min(f0s[:,1])) + 10)
     
     
     analysisWindowSamples = analysisWindow*step
@@ -300,10 +291,8 @@ def eaQHMAnalysisAndSynthesis(speechFile: str, gender: str or tuple = 'other', s
                             fm = concatenate((-flipud(transpose1dArray(fm)), tmp_zeros, transpose1dArray(fm)), axis=1)
                             am = concatenate((flipud(transpose1dArray(am)), tmp_zeros, transpose1dArray(am)), axis=1)
                         
-                        if not eaQHM:
-                            amplitudes_tmp, slopes_tmp = aqhmLS_complexamps(s[window_range + tith], fm, window, fs)
-                        else:
-                            amplitudes_tmp, slopes_tmp = eaqhmLS_complexamps(s[window_range + tith], am, fm, window, fs)
+                        
+                        amplitudes_tmp, slopes_tmp = eaqhmLS_complexamps(s[window_range + tith], am, fm, window, fs)
                         
                         fmismatch_tmp = fs/(2*pi)*divide(multiply(real(amplitudes_tmp), imag(slopes_tmp)) - multiply(imag(amplitudes_tmp), real(slopes_tmp)), abs(amplitudes_tmp)**2)
                         
@@ -475,67 +464,6 @@ def iqhmLS_complexamps(s, f0range, window, fs: int):
     arr = dot(EwindowT, windowSignal)
     ampsl = dot(inv(R), arr)
         
-    amplitudes = ampsl[0:K]
-    slopes = ampsl[K:2*K+1]
-    
-    return amplitudes, slopes
-    
-def aqhmLS_complexamps(s, fm, window, fs):
-    '''
-    Computes the parameters of first order complex polynomial
-    model using Least Squares and a FM model for the frequency. 
-
-    Parameters
-    ----------
-    s : array_like
-        The part of the signal to be computed.
-    fm : array_like
-        The estimated instantaneous frequencies.
-    window : array_like
-        The window of the signal to be computed.
-    fs : int
-        The sampling frequency.
-
-    Returns
-    -------
-    amplitudes : array_like
-        Amplitude of harmonics.
-    slopes : array_like
-        Slope of harmonics.
-
-    '''
-    windowT = transpose1dArray(window)
-    
-    length = len(fm)
-    K = len(fm[0])
-    
-    midlen = int((length-1)/2)
-    
-    window_range = arange(-midlen,midlen+1)
-    window_rangeT = transpose1dArray(window_range)
-    
-    f_an = zeros((K, length), float)
-    for k in range(K):
-        f_an[k] = lfilter([1], [1, -1], fm[:, k])
-        f_an[k] -= f_an[k][midlen]
-    
-    t = (2*pi*f_an)/fs
-    tT = transpose(t)
-    
-    E1 = cos(tT) + 1j* sin(tT)
-    E = concatenate((E1, tile(window_rangeT, (1, K))*E1), axis=1)
-    
-    Ewindow = multiply(E, tile(windowT, (1, 2*K))) 
-    EwindowT = conjugate(transpose(Ewindow))
-    
-    R = dot(EwindowT, Ewindow)
-    
-    #assert(cond(R) < 10**(10)),'CAUTION!!! Bad condition of matrix.'
-    
-    windowSignal = multiply(windowT, s)
-    arr = dot(EwindowT, windowSignal)
-    ampsl = dot(inv(R), arr)
-    
     amplitudes = ampsl[0:K]
     slopes = ampsl[K:2*K+1]
     

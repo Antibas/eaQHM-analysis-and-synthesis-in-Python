@@ -50,6 +50,7 @@ diff-match-patch @ file:///tmp/build/80754af9/diff-match-patch_1594828741838/wor
 distributed @ file:///C:/ci/distributed_1594742844291/work
 docopt==0.6.2
 docutils==0.16
+easygui==0.98.2
 entrypoints==0.3
 et-xmlfile==1.0.1
 fastcache==1.1.0
