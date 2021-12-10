@@ -3,10 +3,10 @@
 ### Author: Panagiotis Antivasis, Nov. 2021
 
 ## Introduction
-This code is built upon a speech analysis and synthesis system from paper [[1]](##code-citation). The system is the so-called **extended adaptive Quasi-Harmonic Model (eaQHM)** and this is the Python source code implementation.
+This code is built upon a speech analysis and synthesis system from paper [[1]](#code-citation). The system is the so-called **extended adaptive Quasi-Harmonic Model (eaQHM)** and this is the Python source code implementation.
 
 ## eaQHMAnalysisAndSynthesis
-**eaQHMAnalysisAndSynthesis** is a function that performs **extended adaptive Quasi-Harmonic Analysis and Synthesis** of a speech signal. In other words, it receives a *.wav* file and some other optional parameters and decomposes speech into AM-FM components according to the model mentioned, by producing a fully deterministic component of the signal and then iteratively refining it, until the reconstructed signal converges in *quasi-harmonicity* [[1]](##code-citation). 
+**eaQHMAnalysisAndSynthesis** is a function that performs **extended adaptive Quasi-Harmonic Analysis and Synthesis** of a speech signal. In other words, it receives a *.wav* file and some other optional parameters and decomposes speech into AM-FM components according to the model mentioned, by producing a fully deterministic component of the signal and then iteratively refining it, until the reconstructed signal converges in *quasi-harmonicity* [[1]](#code-citation). 
 
 ## Prerequisites & Requirements
 **Python 3.8.x** and up. It is also highly suggested to use [Spyder](https://www.spyder-ide.org/) environment as the whole code was tested in it. Before you run the code, make sure to install all requirements by executing:
@@ -40,7 +40,7 @@ What you have to do is:
 2. Run the code.
 3. A file dialog should open where you must select the *.wav* file of your choice.
 4. Specify the gender of the speaker ("male", "female" or other). You may also use "child" as an input.
-5. The program will print some prompts showing the **Signal-to-Reconstruction-Ratio (SRER)** [[1]](##code-citation) of each adaptation and some plots will be generated.
+5. The program will print some prompts showing the **Signal-to-Reconstruction-Ratio (SRER)** [[1]](#code-citation) of each adaptation and some plots will be generated.
 6. After the program terminates, a *\*filename\*_reconstructed.wav* file will be generated.
 
 Here is an example of the output of the code running *SA19.wav*:
