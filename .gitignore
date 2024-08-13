@@ -1,7 +1,8 @@
 # Python
 __pycache__/
 time/
-
+venv
+reqs.txt
 debug.py
 test.py
 writefiles.py
